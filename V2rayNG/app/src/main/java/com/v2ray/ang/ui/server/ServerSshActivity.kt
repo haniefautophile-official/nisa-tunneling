@@ -45,11 +45,23 @@ class ServerSshActivity : BaseServerActivity() {
         var slowDnsPubkey by rememberSaveable { mutableStateOf(initialConfig.slowDnsPubkey ?: "") }
         var slowDnsDoh by rememberSaveable { mutableStateOf(initialConfig.slowDnsDoh ?: "") }
 
+        var payloadEnabled by rememberSaveable { mutableStateOf(!initialConfig.sshPayload.isNullOrBlank()) }
+        var sshPayload by rememberSaveable { mutableStateOf(initialConfig.sshPayload ?: "") }
+        var tlsEnabled by rememberSaveable { mutableStateOf(initialConfig.sshTls) }
+        var sshSni by rememberSaveable { mutableStateOf(initialConfig.sshSni ?: "") }
+        var proxyEnabled by rememberSaveable { mutableStateOf(!initialConfig.sshProxy.isNullOrBlank()) }
+        var sshProxy by rememberSaveable { mutableStateOf(initialConfig.sshProxy ?: "") }
+
         ServerEditorScaffold(
             title = serverConfigType.toString(),
             onSaveClick = {
                 userError = username.isBlank()
-                saveSsh(uiState, username, slowDnsEnabled, slowDnsDomain, slowDnsPubkey, slowDnsDoh)
+                saveSsh(
+                    uiState, username, slowDnsEnabled, slowDnsDomain, slowDnsPubkey, slowDnsDoh,
+                    if (payloadEnabled) sshPayload else "",
+                    tlsEnabled, sshSni,
+                    if (proxyEnabled && !slowDnsEnabled) sshProxy else ""
+                )
             }
         ) {
             FormTextField(
@@ -88,6 +100,53 @@ class ServerSshActivity : BaseServerActivity() {
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                Checkbox(checked = payloadEnabled, onCheckedChange = { payloadEnabled = it })
+                Text("Payload kustom")
+            }
+            if (payloadEnabled) {
+                FormTextField(
+                    label = "Payload",
+                    value = sshPayload,
+                    onValueChange = { sshPayload = it },
+                    placeholder = "GET / HTTP/1.1[crlf]Host: bug.host[crlf]Upgrade: websocket[crlf][crlf]",
+                    supportingText = "Placeholder: [crlf] [lf] [cr] [host] [port] [host_port] [protocol] [split]"
+                )
+            }
+            Row(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Checkbox(checked = tlsEnabled, onCheckedChange = { tlsEnabled = it })
+                Text("TLS (SNI)")
+            }
+            if (tlsEnabled) {
+                FormTextField(
+                    label = "SNI (kosong = pakai Host)",
+                    value = sshSni,
+                    onValueChange = { sshSni = it }
+                )
+            }
+            if (!slowDnsEnabled) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(checked = proxyEnabled, onCheckedChange = { proxyEnabled = it })
+                    Text("Proxy HTTP")
+                }
+                if (proxyEnabled) {
+                    FormTextField(
+                        label = "Proxy ([user:pass@]host:port)",
+                        value = sshProxy,
+                        onValueChange = { sshProxy = it }
+                    )
+                }
+            }
+
+            Row(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Checkbox(checked = slowDnsEnabled, onCheckedChange = { slowDnsEnabled = it })
                 Text("Aktifkan SlowDNS (DNSTT)")
             }
@@ -117,7 +176,11 @@ class ServerSshActivity : BaseServerActivity() {
         slowDnsEnabled: Boolean,
         slowDnsDomain: String,
         slowDnsPubkey: String,
-        slowDnsDoh: String
+        slowDnsDoh: String,
+        payload: String,
+        tls: Boolean,
+        sni: String,
+        proxy: String
     ): Boolean {
         if (!validateBasicConfig(state)) return false
         if (username.isBlank()) {
@@ -140,7 +203,11 @@ class ServerSshActivity : BaseServerActivity() {
             slowDnsEnabled = slowDnsEnabled,
             slowDnsDomain = slowDnsDomain.trim(),
             slowDnsPubkey = slowDnsPubkey.trim(),
-            slowDnsDoh = slowDnsDoh.trim()
+            slowDnsDoh = slowDnsDoh.trim(),
+            sshPayload = payload.trim().ifEmpty { null },
+            sshTls = tls,
+            sshSni = sni.trim().ifEmpty { null },
+            sshProxy = proxy.trim().ifEmpty { null }
         )
         config.description = AngConfigManager.generateDescription(config)
         if (config.subscriptionId.isEmpty() && !subscriptionId.isNullOrEmpty()) {
