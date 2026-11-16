@@ -25,19 +25,13 @@ import androidx.compose.ui.unit.dp
 import com.v2ray.ang.R
 import com.v2ray.ang.dto.entities.ProfileItem
 import com.v2ray.ang.enums.EConfigType
+import com.v2ray.ang.handler.MmkvManager
 import com.v2ray.ang.ui.compose.FormTextField
+import com.v2ray.ang.util.Utils
 
 class ServerTrojanActivity : BaseServerActivity() {
 
     override val serverConfigType: EConfigType = EConfigType.TROJAN
-
-    // Variabel statis sementara untuk menyimpan data SlowDNS
-    companion object {
-        var tempSlowDnsEnabled = false
-        var tempSlowDnsDomain: String? = null
-        var tempSlowDnsPubkey: String? = null
-        var tempSlowDnsDoh: String? = null
-    }
 
     @Composable
     override fun ScreenContent() {
@@ -51,26 +45,35 @@ class ServerTrojanActivity : BaseServerActivity() {
             configType = EConfigType.TROJAN
         }
 
-        // Inisialisasi state dari variabel statis atau dari config awal
         var showSlowDnsDialog by remember { mutableStateOf(false) }
-        var slowDnsEnabled by remember { mutableStateOf(tempSlowDnsEnabled || initialConfig.slowDnsEnabled) }
-        var slowDnsDomain by remember { mutableStateOf(tempSlowDnsDomain ?: initialConfig.slowDnsDomain ?: "") }
-        var slowDnsPubkey by remember { mutableStateOf(tempSlowDnsPubkey ?: initialConfig.slowDnsPubkey ?: "") }
-        var slowDnsDoh by remember { mutableStateOf(tempSlowDnsDoh ?: initialConfig.slowDnsDoh ?: "https://cloudflare-dns.com/dns-query") }
+        var slowDnsEnabled by remember { mutableStateOf(initialConfig.slowDnsEnabled) }
+        var slowDnsDomain by remember { mutableStateOf(initialConfig.slowDnsDomain ?: "") }
+        var slowDnsPubkey by remember { mutableStateOf(initialConfig.slowDnsPubkey ?: "") }
+        var slowDnsDoh by remember { mutableStateOf(initialConfig.slowDnsDoh ?: "https://cloudflare-dns.com/dns-query") }
 
         ServerEditorScaffold(
             title = serverConfigType.toString(),
             onSaveClick = { 
-                // Simpan ke variabel statis agar bisa diambil oleh fungsi saveServer
-                tempSlowDnsEnabled = slowDnsEnabled
-                tempSlowDnsDomain = slowDnsDomain
-                tempSlowDnsPubkey = slowDnsPubkey
-                tempSlowDnsDoh = slowDnsDoh
+                val profileItem = uiState.toProfileItem(initialConfig)
                 
-                // Beri tahu BaseServerActivity bahwa data SlowDNS siap disimpan
-                hasTempSlowDns = true 
+                // Simpan data SlowDNS langsung ke profil sebelum disimpan
+                profileItem.slowDnsEnabled = slowDnsEnabled
+                profileItem.slowDnsDomain = slowDnsDomain
+                profileItem.slowDnsPubkey = slowDnsPubkey
+                profileItem.slowDnsDoh = slowDnsDoh
                 
-                saveServer(uiState) 
+                if (!validateProtocolConfig(profileItem)) {
+                    Utils.toast("Konfigurasi tidak valid")
+                    return@ServerEditorScaffold
+                }
+
+                val guid = profileItem.guid
+                if (MmkvManager.encodeServerConfig(guid, profileItem)) {
+                    Utils.toast("Berhasil disimpan")
+                    finish()
+                } else {
+                    Utils.toast("Gagal menyimpan")
+                }
             }
         ) {
             CommonBasicFields(uiState)
@@ -83,7 +86,6 @@ class ServerTrojanActivity : BaseServerActivity() {
                 buildProfileItem = { uiState.toProfileItem(initialConfig) }
             )
             
-            // Tombol untuk membuka pengaturan SlowDNS
             Spacer(modifier = Modifier.height(16.dp))
             Button(
                 onClick = { showSlowDnsDialog = true },
@@ -96,7 +98,6 @@ class ServerTrojanActivity : BaseServerActivity() {
             Spacer(modifier = Modifier.height(16.dp))
         }
 
-        // Dialog SlowDNS
         if (showSlowDnsDialog) {
             SlowDnsDialog(
                 isEnabled = slowDnsEnabled,
@@ -116,12 +117,8 @@ class ServerTrojanActivity : BaseServerActivity() {
     }
 
     override fun validateProtocolConfig(config: ProfileItem): Boolean {
-        if (config.password.isNullOrBlank()) {
-            return false
-        }
-        if (config.security.isNullOrBlank()) {
-            return false
-        }
+        if (config.password.isNullOrBlank()) return false
+        if (config.security.isNullOrBlank()) return false
         return true
     }
 
@@ -135,7 +132,6 @@ class ServerTrojanActivity : BaseServerActivity() {
         )
     }
 
-    // --- DIALOG SLOW DNS ---
     @Composable
     private fun SlowDnsDialog(
         isEnabled: Boolean,
