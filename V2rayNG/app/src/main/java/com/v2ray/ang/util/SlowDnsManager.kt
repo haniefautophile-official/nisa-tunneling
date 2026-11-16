@@ -12,8 +12,8 @@ object SlowDnsManager {
 
         val binaryPath = File(context.applicationInfo.nativeLibraryDir, "libdnstt.so").absolutePath
         
-        // Kita simpan pubkey ke file sementara di memori HP
-        val pubkeyFile = File(context.filesDir, "dnstt_pubkey.txt")
+        // Simpan pubkey ke memori internal
+        val pubkeyFile = File(context.filesDir, "dnstt_pubkey_temp.txt")
         try {
             pubkeyFile.writeText(pubkey.trim())
         } catch (e: Exception) {
@@ -21,7 +21,7 @@ object SlowDnsManager {
             return
         }
 
-        // Susun perintah dnstt-client dengan DoH dinamis
+        // Susun perintah dnstt-client
         val command = listOf(
             binaryPath,
             "-doh", doh.ifEmpty { "https://cloudflare-dns.com/dns-query" },
