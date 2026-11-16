@@ -1,6 +1,7 @@
 package com.v2ray.ang.ui.server
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -101,16 +102,17 @@ class ServerTrojanActivity : BaseServerActivity() {
         )
     }
 
-    // --- TAMBAHAN DIALOG SLOW DNS ---
+    // --- DIALOG SLOW DNS ---
     @Composable
     private fun SlowDnsDialog(
         uiState: ServerUiState,
         onDismiss: () -> Unit
     ) {
-        var isEnabled by remember { mutableStateOf(uiState.slowDnsEnabled) }
-        var domain by remember { mutableStateOf(uiState.slowDnsDomain ?: "") }
-        var pubkey by remember { mutableStateOf(uiState.slowDnsPubkey ?: "") }
-        var doh by remember { mutableStateOf(uiState.slowDnsDoh ?: "https://cloudflare-dns.com/dns-query") }
+        // Deklarasi tipe data secara eksplisit agar Compose tidak kebingungan
+        var isEnabled by remember { mutableStateOf<Boolean>(uiState.slowDnsEnabled) }
+        var domain by remember { mutableStateOf<String>(uiState.slowDnsDomain ?: "") }
+        var pubkey by remember { mutableStateOf<String>(uiState.slowDnsPubkey ?: "") }
+        var doh by remember { mutableStateOf<String>(uiState.slowDnsDoh ?: "https://cloudflare-dns.com/dns-query") }
 
         AlertDialog(
             onDismissRequest = onDismiss,
@@ -118,7 +120,7 @@ class ServerTrojanActivity : BaseServerActivity() {
             text = {
                 Column {
                     // Checkbox Aktifkan
-                    androidx.compose.foundation.layout.Row {
+                    Row {
                         Checkbox(
                             checked = isEnabled,
                             onCheckedChange = { isEnabled = it }
