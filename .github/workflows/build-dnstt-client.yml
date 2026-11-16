@@ -1,0 +1,53 @@
+name: Build dnstt client (Android, semua tipe record)
+
+# Tahap 1: hanya membangun klien SlowDNS untuk Android. Tidak menyentuh build APK utama.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Ambil VayDNS (versi dikunci)
+        run: |
+          git clone https://github.com/net2share/vaydns.git vaydns
+          git -C vaydns checkout a0ff70110d5e96686ab8f4c8e1c44cd09be07a75
+
+      - name: Izinkan tipe record non-TXT bersama mode kompatibel dnstt
+        working-directory: vaydns
+        run: |
+          python3 - <<'PY'
+          p = "vaydns-client/main.go"
+          s = open(p).read()
+          old = '''\t\tif recordTypeStr != "txt" {
+          \t\t\tlog.Warnf("-dnstt-compat forces record-type to txt; ignoring -record-type %s", recordTypeStr)
+          \t\t\trecordTypeStr = "txt"
+          \t\t}
+          '''
+          assert s.count(old) == 1, "blok tidak ditemukan"
+          open(p, "w").write(s.replace(old, ""))
+          print("patch ok")
+          PY
+
+      - name: Kompilasi arm64-v8a dan armeabi-v7a
+        working-directory: vaydns
+        env:
+          CGO_ENABLED: '0'
+        run: |
+          mkdir -p ../out/arm64-v8a ../out/armeabi-v7a
+          GOOS=linux GOARCH=arm64 go build -trimpath -ldflags="-s -w" -o ../out/arm64-v8a/libdnstt.so ./vaydns-client
+          GOOS=linux GOARCH=arm GOARM=7 go build -trimpath -ldflags="-s -w" -o ../out/armeabi-v7a/libdnstt.so ./vaydns-client
+          ls -la ../out/*/
+          file ../out/*/libdnstt.so
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dnstt-client-android
+          path: out/
