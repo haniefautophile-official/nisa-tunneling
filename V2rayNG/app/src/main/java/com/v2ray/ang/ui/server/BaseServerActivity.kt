@@ -25,13 +25,18 @@ abstract class BaseServerActivity : AppCompatActivity() {
 
     var initialConfig: ProfileItem = ProfileItem.create(EConfigType.VMESS)
         private set
+        
+    // Variabel untuk menyimpan ID profil dari Intent
+    var currentGuid: String = ""
+        private set
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        val guid = intent.getStringExtra("guid") ?: ""
-        if (guid.isNotEmpty()) {
-            MmkvManager.decodeServerConfig(guid)?.let {
+        // Ambil guid dari Intent
+        currentGuid = intent.getStringExtra("guid") ?: ""
+        if (currentGuid.isNotEmpty()) {
+            MmkvManager.decodeServerConfig(currentGuid)?.let {
                 initialConfig = it
             }
         }
@@ -78,16 +83,14 @@ abstract class BaseServerActivity : AppCompatActivity() {
     fun saveServer(uiState: ServerUiState) {
         val profileItem = uiState.toProfileItem(initialConfig)
 
-        // Data SlowDNS sudah dimasukkan ke dalam profileItem oleh ServerTrojanActivity
-        // Jadi di sini kita cukup menyimpannya saja.
-
+        // Validasi konfigurasi
         if (!validateProtocolConfig(profileItem)) {
             this.toast("Konfigurasi tidak valid")
             return
         }
 
-        val guid = profileItem.guid
-        if (MmkvManager.encodeServerConfig(guid, profileItem)) {
+        // Simpan menggunakan currentGuid (bukan profileItem.guid)
+        if (MmkvManager.encodeServerConfig(currentGuid, profileItem)) {
             this.toast("Berhasil disimpan")
             finish()
         } else {
