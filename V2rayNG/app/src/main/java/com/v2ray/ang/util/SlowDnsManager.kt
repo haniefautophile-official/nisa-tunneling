@@ -6,7 +6,7 @@ import java.io.File
 import kotlin.concurrent.thread
 
 object SlowDnsManager {
-    private const val TAG = "SlowDnsManager"
+    private const val TAG = "GoLog" // tag ini yang ditampilkan menu Logcat aplikasi
     private var process: Process? = null
 
     // Jangan 10808: itu port SOCKS bawaan aplikasi (AppConfig.PORT_SOCKS).
