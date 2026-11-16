@@ -24,6 +24,7 @@ import com.v2ray.ang.handler.SettingsManager
 import com.v2ray.ang.root.RootLanSharing
 import com.v2ray.ang.util.LogUtil
 import com.v2ray.ang.util.SlowDnsManager
+import com.v2ray.ang.util.SshManager
 import com.v2ray.ang.util.Utils
 import java.lang.ref.SoftReference
 import java.util.concurrent.atomic.AtomicBoolean
@@ -51,6 +52,11 @@ class CoreVpnService : VpnService(), ServiceControl {
     override fun onDestroy() {
         super.onDestroy()
         LogUtil.i(AppConfig.TAG, "StartCore-VPN: Service destroyed")
+        try {
+            SshManager.stop()
+        } catch (e: Exception) {
+            LogUtil.e(AppConfig.TAG, "StartCore-VPN: Failed to stop SSH", e)
+        }
         try {
             SlowDnsManager.stop()
             LogUtil.i(AppConfig.TAG, "StartCore-VPN: SlowDNS stopped")
@@ -87,6 +93,7 @@ class CoreVpnService : VpnService(), ServiceControl {
             return START_NOT_STICKY
         }
         startSlowDnsIfNeeded()
+        startSshIfNeeded()
         startService()
         return START_STICKY
     }
@@ -250,6 +257,20 @@ class CoreVpnService : VpnService(), ServiceControl {
     fun unlockStart() {
         isStartingLock.set(false)
         LogUtil.w(AppConfig.TAG, "StartCore-VPN: unlockStart")
+    }
+
+    private fun startSshIfNeeded() {
+        try {
+            val id = MmkvManager.getSelectServer()
+            if (id.isNullOrEmpty()) return
+            val profile = MmkvManager.decodeServerConfig(id) ?: return
+            if (profile.configType == com.v2ray.ang.enums.EConfigType.SSH) {
+                LogUtil.i(AppConfig.TAG, "StartCore-VPN: Starting SSH helper for ${profile.server}")
+                SshManager.start(this, profile)
+            }
+        } catch (e: Exception) {
+            LogUtil.e(AppConfig.TAG, "StartCore-VPN: Error in startSshIfNeeded", e)
+        }
     }
 
     private fun startSlowDnsIfNeeded() {
