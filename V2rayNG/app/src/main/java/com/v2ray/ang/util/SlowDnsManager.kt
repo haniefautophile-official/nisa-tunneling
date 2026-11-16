@@ -5,21 +5,28 @@ import java.io.File
 
 object SlowDnsManager {
     private var process: Process? = null
-    const val SLOW_DNS_LOCAL_PORT = 10808 // Port lokal untuk Xray
+    const val SLOW_DNS_LOCAL_PORT = 10808
 
-    fun start(context: Context, domain: String, pubkey: String) {
+    fun start(context: Context, domain: String, pubkey: String, doh: String) {
         if (process != null) return 
 
-        // Mengambil lokasi libdnstt.so yang sudah diekstrak Android
         val binaryPath = File(context.applicationInfo.nativeLibraryDir, "libdnstt.so").absolutePath
-        val cleanDomain = domain.trim()
+        
+        // Kita simpan pubkey ke file sementara di memori HP
+        val pubkeyFile = File(context.filesDir, "dnstt_pubkey.txt")
+        try {
+            pubkeyFile.writeText(pubkey.trim())
+        } catch (e: Exception) {
+            e.printStackTrace()
+            return
+        }
 
-        // Perintah eksekusi
+        // Susun perintah dnstt-client dengan DoH dinamis
         val command = listOf(
             binaryPath,
-            "-doh", "https://cloudflare-dns.com/dns-query", 
-            "-pubkey-file", pubkey,
-            cleanDomain,
+            "-doh", doh.ifEmpty { "https://cloudflare-dns.com/dns-query" },
+            "-pubkey-file", pubkeyFile.absolutePath,
+            domain.trim(),
             "127.0.0.1:$SLOW_DNS_LOCAL_PORT"
         )
 
