@@ -89,8 +89,9 @@ abstract class BaseServerActivity : AppCompatActivity() {
             return
         }
 
-        // Simpan menggunakan currentGuid (bukan profileItem.guid)
-        if (MmkvManager.encodeServerConfig(currentGuid, profileItem)) {
+        // Simpan menggunakan currentGuid. Karena fungsi mengembalikan String, kita cek apakah isinya kosong atau tidak.
+        val savedGuid = MmkvManager.encodeServerConfig(currentGuid, profileItem)
+        if (savedGuid.isNotEmpty()) {
             this.toast("Berhasil disimpan")
             finish()
         } else {
