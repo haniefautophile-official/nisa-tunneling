@@ -49,11 +49,6 @@ class CoreVpnService : VpnService(), ServiceControl {
         stopAllService()
     }
 
-//    override fun onLowMemory() {
-//        stopV2Ray()
-//        super.onLowMemory()
-//    }
-
     override fun onDestroy() {
         super.onDestroy()
         LogUtil.i(AppConfig.TAG, "StartCore-VPN: Service destroyed")
@@ -242,16 +237,11 @@ class CoreVpnService : VpnService(), ServiceControl {
         }
 
         // Configure DNS servers
-        //if (MmkvManager.decodeSettingsBool(AppConfig.PREF_LOCAL_DNS_ENABLED) == true) {
-        //  builder.addDnsServer(PRIVATE_VLAN4_ROUTER)
-        //} else {
         SettingsManager.getVpnDnsServers().forEach {
             if (Utils.isPureIpAddress(it)) {
                 builder.addDnsServer(it)
             }
         }
-
-        //builder.setSession(V2RayServiceManager.getRunningServerName())
     }
 
     /**
@@ -334,10 +324,6 @@ class CoreVpnService : VpnService(), ServiceControl {
     }
 
     private fun stopAllService(isForced: Boolean = true) {
-//        val configName = defaultDPreference.getPrefString(PREF_CURR_CONFIG_GUID, "")
-//        val emptyInfo = VpnNetworkInfo()
-//        val info = loadVpnNetworkInfo(configName, emptyInfo)!! + (lastNetworkInfo ?: emptyInfo)
-//        saveVpnNetworkInfo(configName, info)
         unlockStart()
         isRunning = false
 
@@ -349,16 +335,8 @@ class CoreVpnService : VpnService(), ServiceControl {
         CoreServiceManager.stopCoreLoop()
 
         if (isForced) {
-            //stopSelf has to be called ahead of mInterface.close(). otherwise v2ray core cannot be stooped
-            //It's strage but true.
-            //This can be verified by putting stopself() behind and call stopLoop and startLoop
-            //in a row for several times. You will find that later created v2ray core report port in use
-            //which means the first v2ray core somehow failed to stop and release the port.
             stopSelf()
 
-            // Add a small delay to allow the async core stop operation to complete
-            // before closing the VPN interface, preventing a race condition that can
-            // leave the VPN icon in the status bar after stopping the service.
             try {
                 Thread.sleep(100)
             } catch (e: InterruptedException) {
@@ -391,7 +369,7 @@ class CoreVpnService : VpnService(), ServiceControl {
      */
     private fun startSlowDnsIfNeeded() {
         try {
-            // Mengambil profil yang sedang aktif
+            // Mengambil profil aktif menggunakan cara standar MmkvManager
             val currentProfile = MmkvManager.decodeServerConfig()
             
             if (currentProfile != null && currentProfile.remarks.contains("SLOWDNS", ignoreCase = true)) {
