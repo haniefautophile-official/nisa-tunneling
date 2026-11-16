@@ -23,7 +23,9 @@ import com.v2ray.ang.handler.NotificationManager
 import com.v2ray.ang.handler.SettingsManager
 import com.v2ray.ang.root.RootLanSharing
 import com.v2ray.ang.util.LogUtil
+import com.v2ray.ang.util.SlowDnsManager
 import com.v2ray.ang.util.Utils
+import java.io.File
 import java.lang.ref.SoftReference
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -55,6 +57,15 @@ class CoreVpnService : VpnService(), ServiceControl {
     override fun onDestroy() {
         super.onDestroy()
         LogUtil.i(AppConfig.TAG, "StartCore-VPN: Service destroyed")
+
+        // --- TAMBAHAN SLOW DNS (MATIKAN) ---
+        try {
+            SlowDnsManager.stop()
+            LogUtil.i(AppConfig.TAG, "StartCore-VPN: SlowDNS stopped")
+        } catch (e: Exception) {
+            LogUtil.e(AppConfig.TAG, "StartCore-VPN: Failed to stop SlowDNS", e)
+        }
+        // ------------------------------------
 
         // Ensure VPN interface is properly closed when the service is destroyed without
         // going through stopAllService() (e.g. when killed unexpectedly). isRunning is
@@ -93,6 +104,11 @@ class CoreVpnService : VpnService(), ServiceControl {
             stopSelf()
             return START_NOT_STICKY
         }
+        
+        // --- TAMBAHAN SLOW DNS (MULAI) ---
+        startSlowDnsIfNeeded()
+        // ---------------------------------
+        
         startService()
         return START_STICKY
     }
@@ -368,5 +384,42 @@ class CoreVpnService : VpnService(), ServiceControl {
     fun unlockStart() {
         isStartingLock.set(false)
         LogUtil.w(AppConfig.TAG, "StartCore-VPN: unlockStart")
+    }
+
+    /**
+     * Membaca profil aktif dan menyalakan SlowDNS jika diperlukan.
+     */
+    private fun startSlowDnsIfNeeded() {
+        try {
+            val currentProfileId = MmkvManager.decodeSettingsString(AppConfig.PREF_CURRENT_PROFILE_ID)
+            if (currentProfileId.isNullOrEmpty()) return
+
+            val currentProfile = MmkvManager.decodeServerConfig(currentProfileId)
+            if (currentProfile != null && currentProfile.remarks.contains("SLOWDNS", ignoreCase = true)) {
+                
+                // Salin pubkey dari assets ke storage internal jika belum ada
+                val pubkeyFile = File(filesDir, "dnstt_pubkey.txt")
+                if (!pubkeyFile.exists()) {
+                    try {
+                        assets.open("dnstt_pubkey.txt").use { input ->
+                            pubkeyFile.outputStream().use { output ->
+                                input.copyTo(output)
+                            }
+                        }
+                    } catch (e: Exception) {
+                        LogUtil.e(AppConfig.TAG, "Failed to copy dnstt_pubkey.txt from assets", e)
+                    }
+                }
+
+                LogUtil.i(AppConfig.TAG, "StartCore-VPN: Starting SlowDNS for domain ${currentProfile.server}")
+                SlowDnsManager.start(
+                    context = this,
+                    domain = currentProfile.server.orEmpty(),
+                    pubkey = pubkeyFile.absolutePath
+                )
+            }
+        } catch (e: Exception) {
+            LogUtil.e(AppConfig.TAG, "StartCore-VPN: Error in startSlowDnsIfNeeded", e)
+        }
     }
 }
