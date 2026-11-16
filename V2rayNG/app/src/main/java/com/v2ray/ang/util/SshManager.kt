@@ -1,7 +1,10 @@
 package com.v2ray.ang.util
 
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
+import com.v2ray.ang.extension.toast
 import com.v2ray.ang.dto.entities.ProfileItem
 import java.io.File
 import java.net.Inet4Address
@@ -16,6 +19,16 @@ import kotlin.concurrent.thread
 object SshManager {
     private const val TAG = "GoLog" // tag yang ditampilkan menu Logcat aplikasi
     private var process: Process? = null
+    @Volatile private var stopping = false
+
+    /** Logcat di sebagian HP tidak menampilkan log, jadi status juga ditampilkan lewat toast. */
+    private fun say(context: Context, msg: String) {
+        Log.i(TAG, msg)
+        val app = context.applicationContext
+        Handler(Looper.getMainLooper()).post {
+            try { app.toast(msg.take(300), true) } catch (_: Exception) { }
+        }
+    }
 
     // Port SOCKS bawaan aplikasi 10808 dan SlowDNS 10899, jadi pakai 10898.
     const val SSH_LOCAL_PORT = 10898
@@ -39,21 +52,23 @@ object SshManager {
 
     @Synchronized
     fun start(context: Context, profile: ProfileItem) {
+        say(context, "SSH: memulai helper...")
         process?.let { if (alive(it)) return }
         process = null
+        stopping = false
 
         val host = profile.server.orEmpty().trim()
         val port = profile.serverPort.orEmpty().trim()
         val user = profile.username.orEmpty().trim()
         val pass = profile.password.orEmpty()
         if (host.isEmpty() || port.isEmpty() || user.isEmpty()) {
-            Log.e(TAG, "SSH: host, port, atau username kosong")
+            say(context, "SSH: host, port, atau username kosong")
             return
         }
 
         val binary = File(context.applicationInfo.nativeLibraryDir, "libsshsocks.so")
         if (!binary.exists()) {
-            Log.e(TAG, "SSH: libsshsocks.so tidak ada di APK (cek folder jniLibs)")
+            say(context, "SSH: libsshsocks.so tidak ada di APK (cek folder jniLibs)")
             return
         }
 
@@ -84,11 +99,11 @@ object SshManager {
                 cmd += listOf("-proxy", auth + hostPort(resolveIp(pHost), pPort))
             } else {
                 val ip = resolveIp(host)
-                Log.i(TAG, "SSH: $host -> $ip")
+                say(context, "SSH: $host -> $ip")
                 cmd += listOf("-connect", hostPort(ip, port))
             }
         } catch (e: Exception) {
-            Log.e(TAG, "SSH: gagal resolve domain ($host): ${e.message}")
+            say(context, "SSH: gagal resolve domain $host: ${e.message}")
             return
         }
         if (profile.sshTls) {
@@ -115,19 +130,30 @@ object SshManager {
             val p = pb.start()
             process = p
             thread(isDaemon = true, name = "sshsocks-log") {
+                val tail = ArrayDeque<String>()
                 try {
-                    p.inputStream.bufferedReader().forEachLine { Log.i(TAG, it) }
+                    p.inputStream.bufferedReader().forEachLine { line ->
+                        Log.i(TAG, line)
+                        tail.addLast(line)
+                        if (tail.size > 4) tail.removeFirst()
+                        if (!stopping) say(context, "SSH: $line")
+                    }
                 } catch (_: Exception) {
                 }
                 Log.w(TAG, "sshsocks berhenti")
+                if (!stopping) {
+                    val code = try { p.waitFor() } catch (_: Exception) { -1 }
+                    say(context, "SSH berhenti (kode $code): " + tail.joinToString(" | "))
+                }
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Gagal menjalankan sshsocks", e)
+            say(context, "SSH: gagal menjalankan helper: ${e.message}")
         }
     }
 
     @Synchronized
     fun stop() {
+        stopping = true
         process?.destroy()
         process = null
     }
