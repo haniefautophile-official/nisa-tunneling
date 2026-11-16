@@ -31,6 +31,14 @@ class ServerTrojanActivity : BaseServerActivity() {
 
     override val serverConfigType: EConfigType = EConfigType.TROJAN
 
+    // Variabel statis sementara untuk menyimpan data SlowDNS
+    companion object {
+        var tempSlowDnsEnabled = false
+        var tempSlowDnsDomain: String? = null
+        var tempSlowDnsPubkey: String? = null
+        var tempSlowDnsDoh: String? = null
+    }
+
     @Composable
     override fun ScreenContent() {
         val options = rememberFieldOptions()
@@ -43,23 +51,21 @@ class ServerTrojanActivity : BaseServerActivity() {
             configType = EConfigType.TROJAN
         }
 
-        // State untuk mengontrol munculnya dialog SlowDNS
+        // Inisialisasi state dari variabel statis atau dari config awal
         var showSlowDnsDialog by remember { mutableStateOf(false) }
-        
-        // Menyimpan data sementara menggunakan state lokal Compose
-        var slowDnsEnabled by remember { mutableStateOf(initialConfig.slowDnsEnabled) }
-        var slowDnsDomain by remember { mutableStateOf(initialConfig.slowDnsDomain ?: "") }
-        var slowDnsPubkey by remember { mutableStateOf(initialConfig.slowDnsPubkey ?: "") }
-        var slowDnsDoh by remember { mutableStateOf(initialConfig.slowDnsDoh ?: "https://cloudflare-dns.com/dns-query") }
+        var slowDnsEnabled by remember { mutableStateOf(tempSlowDnsEnabled || initialConfig.slowDnsEnabled) }
+        var slowDnsDomain by remember { mutableStateOf(tempSlowDnsDomain ?: initialConfig.slowDnsDomain ?: "") }
+        var slowDnsPubkey by remember { mutableStateOf(tempSlowDnsPubkey ?: initialConfig.slowDnsPubkey ?: "") }
+        var slowDnsDoh by remember { mutableStateOf(tempSlowDnsDoh ?: initialConfig.slowDnsDoh ?: "https://cloudflare-dns.com/dns-query") }
 
         ServerEditorScaffold(
             title = serverConfigType.toString(),
             onSaveClick = { 
-                // Pindahkan data SlowDNS ke objek uiState sebelum disimpan
-                uiState.slowDnsEnabled = slowDnsEnabled
-                uiState.slowDnsDomain = slowDnsDomain
-                uiState.slowDnsPubkey = slowDnsPubkey
-                uiState.slowDnsDoh = slowDnsDoh
+                // Simpan ke variabel statis agar bisa diambil oleh fungsi saveServer
+                tempSlowDnsEnabled = slowDnsEnabled
+                tempSlowDnsDomain = slowDnsDomain
+                tempSlowDnsPubkey = slowDnsPubkey
+                tempSlowDnsDoh = slowDnsDoh
                 
                 saveServer(uiState) 
             }
