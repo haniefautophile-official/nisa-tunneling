@@ -36,6 +36,7 @@ import com.v2ray.ang.ui.server.ProfileEditorResult
 import com.v2ray.ang.ui.server.ServerCustomConfigActivity
 import com.v2ray.ang.ui.server.ServerGroupActivity
 import com.v2ray.ang.ui.server.ServerHttpActivity
+import com.v2ray.ang.ui.server.ServerSshActivity
 import com.v2ray.ang.ui.server.ServerHysteria2Activity
 import com.v2ray.ang.ui.server.ServerMasqueActivity
 import com.v2ray.ang.ui.server.ServerProxyChainActivity
@@ -215,6 +216,7 @@ class MainActivity : HelperBaseComponentActivity() {
             EConfigType.WIREGUARD.value -> Intent(this, ServerWireguardActivity::class.java)
             EConfigType.HYSTERIA2.value -> Intent(this, ServerHysteria2Activity::class.java)
             EConfigType.MASQUE.value -> Intent(this, ServerMasqueActivity::class.java)
+            EConfigType.SSH.value -> Intent(this, ServerSshActivity::class.java)
             else -> Intent(this, ServerHttpActivity::class.java).apply {
                 putExtra("createConfigType", createConfigType)
             }
@@ -268,6 +270,7 @@ class MainActivity : HelperBaseComponentActivity() {
             EConfigType.WIREGUARD -> ServerWireguardActivity::class.java
             EConfigType.HYSTERIA2 -> ServerHysteria2Activity::class.java
             EConfigType.MASQUE -> ServerMasqueActivity::class.java
+            EConfigType.SSH -> ServerSshActivity::class.java
             else -> ServerHttpActivity::class.java
         }
         val intent = Intent(this, activityClass).apply {
