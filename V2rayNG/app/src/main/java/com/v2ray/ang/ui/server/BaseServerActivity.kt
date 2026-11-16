@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -45,6 +46,7 @@ abstract class BaseServerActivity : AppCompatActivity() {
 
     abstract fun validateProtocolConfig(config: ProfileItem): Boolean
 
+    @OptIn(ExperimentalMaterial3Api::class) // <--- INI OBATNYA
     @Composable
     fun ServerEditorScaffold(
         title: String,
@@ -82,7 +84,7 @@ abstract class BaseServerActivity : AppCompatActivity() {
         }
 
         val guid = profileItem.guid
-        if (MmkvManager.encodeServerConfig(guid, profileItem)) {
+        if (MmkvEncoder.encodeServerConfig(guid, profileItem)) { // perbaikan typo
             Utils.toast("Berhasil disimpan")
             finish()
         } else {
