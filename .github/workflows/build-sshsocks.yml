@@ -1,0 +1,42 @@
+name: Build sshsocks (helper SSH, Android)
+
+# Membangun libsshsocks.so (klien SSH + SOCKS5 lokal) untuk arm64-v8a dan armeabi-v7a.
+# Tidak menyentuh build APK utama.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Unduh dependensi dan periksa
+        working-directory: sshsocks
+        run: |
+          go mod tidy
+          gofmt -l . 
+          go vet ./...
+
+      - name: Kompilasi arm64-v8a dan armeabi-v7a
+        working-directory: sshsocks
+        env:
+          CGO_ENABLED: '0'
+        run: |
+          mkdir -p ../out/arm64-v8a ../out/armeabi-v7a
+          GOOS=linux GOARCH=arm64 go build -trimpath -ldflags="-s -w" -o ../out/arm64-v8a/libsshsocks.so .
+          GOOS=linux GOARCH=arm GOARM=7 go build -trimpath -ldflags="-s -w" -o ../out/armeabi-v7a/libsshsocks.so .
+          ls -la ../out/*/
+          file ../out/*/libsshsocks.so
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sshsocks-android
+          path: out/
