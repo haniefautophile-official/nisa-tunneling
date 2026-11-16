@@ -45,10 +45,24 @@ class ServerTrojanActivity : BaseServerActivity() {
 
         // State untuk mengontrol munculnya dialog SlowDNS
         var showSlowDnsDialog by remember { mutableStateOf(false) }
+        
+        // Menyimpan data sementara menggunakan state lokal Compose
+        var slowDnsEnabled by remember { mutableStateOf(initialConfig.slowDnsEnabled) }
+        var slowDnsDomain by remember { mutableStateOf(initialConfig.slowDnsDomain ?: "") }
+        var slowDnsPubkey by remember { mutableStateOf(initialConfig.slowDnsPubkey ?: "") }
+        var slowDnsDoh by remember { mutableStateOf(initialConfig.slowDnsDoh ?: "https://cloudflare-dns.com/dns-query") }
 
         ServerEditorScaffold(
             title = serverConfigType.toString(),
-            onSaveClick = { saveServer(uiState) }
+            onSaveClick = { 
+                // Pindahkan data SlowDNS ke objek uiState sebelum disimpan
+                uiState.slowDnsEnabled = slowDnsEnabled
+                uiState.slowDnsDomain = slowDnsDomain
+                uiState.slowDnsPubkey = slowDnsPubkey
+                uiState.slowDnsDoh = slowDnsDoh
+                
+                saveServer(uiState) 
+            }
         ) {
             CommonBasicFields(uiState)
             TrojanProtocolFields(uiState)
@@ -76,7 +90,17 @@ class ServerTrojanActivity : BaseServerActivity() {
         // Dialog SlowDNS
         if (showSlowDnsDialog) {
             SlowDnsDialog(
-                uiState = uiState,
+                isEnabled = slowDnsEnabled,
+                domain = slowDnsDomain,
+                pubkey = slowDnsPubkey,
+                doh = slowDnsDoh,
+                onSave = { enabled, dom, key, dohUrl ->
+                    slowDnsEnabled = enabled
+                    slowDnsDomain = dom
+                    slowDnsPubkey = key
+                    slowDnsDoh = dohUrl
+                    showSlowDnsDialog = false
+                },
                 onDismiss = { showSlowDnsDialog = false }
             )
         }
@@ -105,25 +129,27 @@ class ServerTrojanActivity : BaseServerActivity() {
     // --- DIALOG SLOW DNS ---
     @Composable
     private fun SlowDnsDialog(
-        uiState: ServerUiState,
+        isEnabled: Boolean,
+        domain: String,
+        pubkey: String,
+        doh: String,
+        onSave: (Boolean, String, String, String) -> Unit,
         onDismiss: () -> Unit
     ) {
-        // Deklarasi tipe data secara eksplisit agar Compose tidak kebingungan
-        var isEnabled by remember { mutableStateOf<Boolean>(uiState.slowDnsEnabled) }
-        var domain by remember { mutableStateOf<String>(uiState.slowDnsDomain ?: "") }
-        var pubkey by remember { mutableStateOf<String>(uiState.slowDnsPubkey ?: "") }
-        var doh by remember { mutableStateOf<String>(uiState.slowDnsDoh ?: "https://cloudflare-dns.com/dns-query") }
+        var tempEnabled by remember { mutableStateOf(isEnabled) }
+        var tempDomain by remember { mutableStateOf(domain) }
+        var tempPubkey by remember { mutableStateOf(pubkey) }
+        var tempDoh by remember { mutableStateOf(doh) }
 
         AlertDialog(
             onDismissRequest = onDismiss,
             title = { Text("Pengaturan SlowDNS (DNSTT)") },
             text = {
                 Column {
-                    // Checkbox Aktifkan
                     Row {
                         Checkbox(
-                            checked = isEnabled,
-                            onCheckedChange = { isEnabled = it }
+                            checked = tempEnabled,
+                            onCheckedChange = { tempEnabled = it }
                         )
                         Text(
                             text = "Aktifkan Mode SlowDNS",
@@ -132,24 +158,24 @@ class ServerTrojanActivity : BaseServerActivity() {
                     }
 
                     OutlinedTextField(
-                        value = domain,
-                        onValueChange = { domain = it },
+                        value = tempDomain,
+                        onValueChange = { tempDomain = it },
                         label = { Text("NS Domain (contoh: ns.domain.com)") },
                         modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(modifier = Modifier.height(8.dp))
 
                     OutlinedTextField(
-                        value = pubkey,
-                        onValueChange = { pubkey = it },
+                        value = tempPubkey,
+                        onValueChange = { tempPubkey = it },
                         label = { Text("Public Key Server") },
                         modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(modifier = Modifier.height(8.dp))
 
                     OutlinedTextField(
-                        value = doh,
-                        onValueChange = { doh = it },
+                        value = tempDoh,
+                        onValueChange = { tempDoh = it },
                         label = { Text("DoH URL (opsional)") },
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -158,11 +184,7 @@ class ServerTrojanActivity : BaseServerActivity() {
             confirmButton = {
                 TextButton(
                     onClick = {
-                        uiState.slowDnsEnabled = isEnabled
-                        uiState.slowDnsDomain = domain
-                        uiState.slowDnsPubkey = pubkey
-                        uiState.slowDnsDoh = doh
-                        onDismiss()
+                        onSave(tempEnabled, tempDomain, tempPubkey, tempDoh)
                     }
                 ) {
                     Text("Simpan")
