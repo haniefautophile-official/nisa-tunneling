@@ -16,8 +16,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import com.v2ray.ang.dto.entities.ProfileItem
 import com.v2ray.ang.enums.EConfigType
+import com.v2ray.ang.extension.toast
 import com.v2ray.ang.handler.MmkvManager
-import com.v2ray.ang.util.Utils
 
 abstract class BaseServerActivity : AppCompatActivity() {
 
@@ -46,7 +46,7 @@ abstract class BaseServerActivity : AppCompatActivity() {
 
     abstract fun validateProtocolConfig(config: ProfileItem): Boolean
 
-    @OptIn(ExperimentalMaterial3Api::class) // <--- INI OBATNYA
+    @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     fun ServerEditorScaffold(
         title: String,
@@ -78,17 +78,20 @@ abstract class BaseServerActivity : AppCompatActivity() {
     fun saveServer(uiState: ServerUiState) {
         val profileItem = uiState.toProfileItem(initialConfig)
 
+        // Data SlowDNS sudah dimasukkan ke dalam profileItem oleh ServerTrojanActivity
+        // Jadi di sini kita cukup menyimpannya saja.
+
         if (!validateProtocolConfig(profileItem)) {
-            Utils.toast("Konfigurasi tidak valid")
+            this.toast("Konfigurasi tidak valid")
             return
         }
 
         val guid = profileItem.guid
-        if (MmkvEncoder.encodeServerConfig(guid, profileItem)) { // perbaikan typo
-            Utils.toast("Berhasil disimpan")
+        if (MmkvManager.encodeServerConfig(guid, profileItem)) {
+            this.toast("Berhasil disimpan")
             finish()
         } else {
-            Utils.toast("Gagal menyimpan")
+            this.toast("Gagal menyimpan")
         }
     }
 }
