@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="menu_item_import_config_manually_ssh" translatable="false">Add [SSH]</string>
+</resources>
