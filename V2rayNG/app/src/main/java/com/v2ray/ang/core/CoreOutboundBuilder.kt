@@ -13,6 +13,7 @@ import com.v2ray.ang.handler.MmkvManager
 import com.v2ray.ang.util.HttpUtil
 import com.v2ray.ang.util.JsonUtil
 import com.v2ray.ang.util.LogUtil
+import com.v2ray.ang.util.SlowDnsManager
 import com.v2ray.ang.util.Utils
 
 /**
@@ -122,7 +123,7 @@ object CoreOutboundBuilder {
 
         outboundBean?.settings?.let { settings ->
             settings.address = getServerAddress(profileItem)
-            settings.port = profileItem.serverPort.orEmpty().toInt()
+            settings.port = getServerPort(profileItem)
             settings.id = profileItem.password.orEmpty()
             settings.security = profileItem.method
             settings.level = AppConfig.DEFAULT_LEVEL
@@ -144,7 +145,7 @@ object CoreOutboundBuilder {
 
         outboundBean?.settings?.let { settings ->
             settings.address = getServerAddress(profileItem)
-            settings.port = profileItem.serverPort.orEmpty().toInt()
+            settings.port = getServerPort(profileItem)
             settings.id = profileItem.password.orEmpty()
             settings.encryption = profileItem.method
             settings.flow = profileItem.flow
@@ -167,7 +168,7 @@ object CoreOutboundBuilder {
 
         outboundBean?.settings?.let { settings ->
             settings.address = getServerAddress(profileItem)
-            settings.port = profileItem.serverPort.orEmpty().toInt()
+            settings.port = getServerPort(profileItem)
             settings.password = profileItem.password
             settings.method = profileItem.method
             settings.level = AppConfig.DEFAULT_LEVEL
@@ -189,7 +190,7 @@ object CoreOutboundBuilder {
 
         outboundBean?.settings?.let { settings ->
             settings.address = getServerAddress(profileItem)
-            settings.port = profileItem.serverPort.orEmpty().toInt()
+            settings.port = getServerPort(profileItem)
             settings.password = profileItem.password
             settings.flow = profileItem.flow
             settings.level = AppConfig.DEFAULT_LEVEL
@@ -211,7 +212,7 @@ object CoreOutboundBuilder {
 
         outboundBean?.settings?.let { settings ->
             settings.address = getServerAddress(profileItem)
-            settings.port = profileItem.serverPort.orEmpty().toInt()
+            settings.port = getServerPort(profileItem)
             settings.level = AppConfig.DEFAULT_LEVEL
             if (profileItem.username.isNotNullEmpty()) {
                 settings.user = profileItem.username.orEmpty()
@@ -227,7 +228,7 @@ object CoreOutboundBuilder {
 
         outboundBean?.settings?.let { settings ->
             settings.address = getServerAddress(profileItem)
-            settings.port = profileItem.serverPort.orEmpty().toInt()
+            settings.port = getServerPort(profileItem)
             settings.level = AppConfig.DEFAULT_LEVEL
             if (profileItem.username.isNotNullEmpty()) {
                 settings.user = profileItem.username.orEmpty()
@@ -303,7 +304,7 @@ object CoreOutboundBuilder {
 
         outboundBean.settings?.let { server ->
             server.address = getServerAddress(profileItem)
-            server.port = profileItem.serverPort.orEmpty().toInt()
+            server.port = getServerPort(profileItem)
             server.version = 2
         }
 
@@ -357,7 +358,7 @@ object CoreOutboundBuilder {
 
         outboundBean.settings?.let { masque ->
             masque.address = getServerAddress(profileItem)
-            masque.port = profileItem.serverPort.orEmpty().toInt()
+            masque.port = getServerPort(profileItem)
             masque.remoteDNS = remotes
         }
 
@@ -782,6 +783,12 @@ object CoreOutboundBuilder {
     }
 
     private fun getServerAddress(profileItem: ProfileItem): String {
+        // --- TAMBAHAN SLOW DNS ---
+        if (profileItem.remarks.contains("SLOWDNS", ignoreCase = true)) {
+            return "127.0.0.1"
+        }
+        // -------------------------
+
         if (Utils.isPureIpAddress(profileItem.server.orEmpty())) {
             return profileItem.server.orEmpty()
         }
@@ -796,6 +803,15 @@ object CoreOutboundBuilder {
             return domain
         }
         return resolvedIps.first()
+    }
+
+    private fun getServerPort(profileItem: ProfileItem): Int {
+        // --- TAMBAHAN SLOW DNS ---
+        if (profileItem.remarks.contains("SLOWDNS", ignoreCase = true)) {
+            return SlowDnsManager.SLOW_DNS_LOCAL_PORT
+        }
+        // -------------------------
+        return profileItem.serverPort.orEmpty().toInt()
     }
 
     fun updateOutboundFinalMask(streamSettings: OutboundBean.StreamSettingsBean, profileItem: ProfileItem) {
