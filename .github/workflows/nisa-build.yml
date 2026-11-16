@@ -26,6 +26,11 @@ jobs:
       - name: Menu Hubungi Admin + wallpaper
         run: bash nisa/branding.sh
 
+      - name: Enkripsi ekspor/impor config
+        env:
+          NISA_SEED: ${{ secrets.NISA_CONFIG_KEY || secrets.APP_KEYSTORE_PASSWORD }}
+        run: bash nisa/encrypt-config.sh
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -69,7 +74,14 @@ jobs:
           KS_ALIAS: ${{ secrets.APP_KEYSTORE_ALIAS }}
         run: |
           if [ -n "$KS_B64" ]; then
-            echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/nisa.jks"
+            printf '%s' "$KS_B64" | tr -d '[:space:]' | base64 -d > "$RUNNER_TEMP/nisa.jks" || {
+              echo "::error::Secret APP_KEYSTORE_BASE64 tidak valid. Salin ulang HANYA baris panjang base64 dari CARA_PAKAI.txt (tanpa teks lain)."
+              exit 1
+            }
+            keytool -list -keystore "$RUNNER_TEMP/nisa.jks" -storepass "$KS_PASS" >/dev/null 2>&1 || {
+              echo "::error::Keystore terbaca, tapi APP_KEYSTORE_PASSWORD salah atau isi keystore rusak."
+              exit 1
+            }
             echo "SIGN_PASS=$KS_PASS"   >> $GITHUB_ENV
             echo "SIGN_ALIAS=$KS_ALIAS" >> $GITHUB_ENV
           else
