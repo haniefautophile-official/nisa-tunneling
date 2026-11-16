@@ -369,8 +369,15 @@ class CoreVpnService : VpnService(), ServiceControl {
      */
     private fun startSlowDnsIfNeeded() {
         try {
-            // Mengambil profil aktif menggunakan cara standar MmkvManager
-            val currentProfile = MmkvManager.decodeServerConfig()
+            // Mengambil ID server yang sedang aktif/dipilih
+            val currentProfileId = MmkvManager.getSelectServer()
+            
+            if (currentProfileId.isNullOrEmpty()) {
+                return
+            }
+
+            // Mengambil data profil berdasarkan ID tersebut
+            val currentProfile = MmkvManager.decodeServerConfig(currentProfileId)
             
             if (currentProfile != null && currentProfile.remarks.contains("SLOWDNS", ignoreCase = true)) {
                 
