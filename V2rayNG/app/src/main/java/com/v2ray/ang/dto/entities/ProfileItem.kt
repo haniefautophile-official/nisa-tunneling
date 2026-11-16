@@ -16,6 +16,13 @@ data class ProfileItem(
     var server: String? = null,
     var serverPort: String? = null,
 
+    // --- TAMBAHAN SLOW DNS ---
+    var slowDnsEnabled: Boolean = false,
+    var slowDnsDomain: String? = null,
+    var slowDnsPubkey: String? = null,
+    var slowDnsDoh: String? = null,
+    // -------------------------
+
     var password: String? = null,
     var method: String? = null,
     var flow: String? = null,
@@ -100,20 +107,6 @@ data class ProfileItem(
             || minPacketSize.isNotNullEmpty()
             || maxPacketSize.isNotNullEmpty()
 
-    /**
-     * Dedicated identity for "remove duplicate configurations".
-     *
-     * Ignores metadata that does not affect connection:
-     * - configVersion
-     * - subscriptionId
-     * - addedTime
-     * - remarks
-     * - description
-     *
-     * All other fields, including configType, are included in the comparison.
-     *
-     * Returns a copy; the caller must not modify it further.
-     */
     fun duplicateIdentity(): ProfileItem =
         copy(
             configVersion = 0,
