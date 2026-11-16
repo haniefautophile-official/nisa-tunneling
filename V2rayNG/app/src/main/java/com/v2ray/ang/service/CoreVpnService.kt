@@ -51,15 +51,12 @@ class CoreVpnService : VpnService(), ServiceControl {
     override fun onDestroy() {
         super.onDestroy()
         LogUtil.i(AppConfig.TAG, "StartCore-VPN: Service destroyed")
-
-        // --- TAMBAHAN SLOW DNS (MATIKAN) ---
         try {
             SlowDnsManager.stop()
             LogUtil.i(AppConfig.TAG, "StartCore-VPN: SlowDNS stopped")
         } catch (e: Exception) {
             LogUtil.e(AppConfig.TAG, "StartCore-VPN: Failed to stop SlowDNS", e)
         }
-        // ------------------------------------
 
         if (isRunning) {
             try {
@@ -71,7 +68,6 @@ class CoreVpnService : VpnService(), ServiceControl {
                 LogUtil.e(AppConfig.TAG, "StartCore-VPN: Failed to close interface in onDestroy", e)
             }
         }
-
         unlockStart()
         NotificationManager.cancelNotification()
     }
@@ -79,9 +75,7 @@ class CoreVpnService : VpnService(), ServiceControl {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         NotificationManager.ensureForeground()
         val isSystemVpnStart = intent == null || intent.action == SERVICE_INTERFACE
-        if (isSystemVpnStart) {
-            unlockStart()
-        }
+        if (isSystemVpnStart) unlockStart()
         if (!tryLockStart()) {
             LogUtil.w(AppConfig.TAG, "StartCore-VPN: Start already in progress")
             return START_NOT_STICKY
@@ -92,18 +86,12 @@ class CoreVpnService : VpnService(), ServiceControl {
             stopSelf()
             return START_NOT_STICKY
         }
-        
-        // --- TAMBAHAN SLOW DNS (MULAI) ---
         startSlowDnsIfNeeded()
-        // ---------------------------------
-        
         startService()
         return START_STICKY
     }
 
-    override fun getService(): Service {
-        return this
-    }
+    override fun getService(): Service = this
 
     override fun startService() {
         if (!::mInterface.isInitialized) {
@@ -115,22 +103,12 @@ class CoreVpnService : VpnService(), ServiceControl {
             stopAllService()
             return
         }
-
         RootLanSharing.startClientSharing(this)
     }
 
-    override fun stopService() {
-        stopAllService(true)
-    }
-
-    override fun vpnProtect(socket: Int): Boolean {
-        return protect(socket)
-    }
-
-    override fun setUnderlyingNetworks(networks: Array<Network>?): Boolean {
-        return super<VpnService>.setUnderlyingNetworks(networks)
-    }
-
+    override fun stopService() { stopAllService(true) }
+    override fun vpnProtect(socket: Int): Boolean = protect(socket)
+    override fun setUnderlyingNetworks(networks: Array<Network>?): Boolean = super<VpnService>.setUnderlyingNetworks(networks)
     override fun attachBaseContext(newBase: Context?) {
         val context = newBase?.let(AppLocaleManager::localizedContext)
         super.attachBaseContext(context)
@@ -142,32 +120,24 @@ class CoreVpnService : VpnService(), ServiceControl {
             LogUtil.e(AppConfig.TAG, "StartCore-VPN: Permission not granted")
             return false
         }
-
         if (configureVpnService() != true) {
             LogUtil.e(AppConfig.TAG, "StartCore-VPN: Configuration failed")
             return false
         }
-
         runTun2socks()
         return true
     }
 
     private fun configureVpnService(): Boolean {
         val builder = Builder()
-
         configureNetworkSettings(builder)
         configurePerAppProxy(builder)
-
         try {
-            if (::mInterface.isInitialized) {
-                mInterface.close()
-            }
+            if (::mInterface.isInitialized) mInterface.close()
         } catch (e: Exception) {
             LogUtil.w(AppConfig.TAG, "Failed to close old interface", e)
         }
-
         configurePlatformFeatures(builder)
-
         try {
             mInterface = builder.establish()!!
             isRunning = true
@@ -182,33 +152,24 @@ class CoreVpnService : VpnService(), ServiceControl {
     private fun configureNetworkSettings(builder: Builder) {
         val vpnConfig = SettingsManager.getCurrentVpnInterfaceAddressConfig()
         val bypassLan = SettingsManager.routingRulesetsBypassLan()
-
         builder.setMtu(SettingsManager.getVpnMtu())
         builder.addAddress(vpnConfig.ipv4Client, 30)
-
         if (bypassLan) {
             AppConfig.ROUTED_IP_LIST.forEach {
                 val addr = it.split('/')
                 builder.addRoute(addr[0], addr[1].toInt())
             }
-        } else {
-            builder.addRoute("0.0.0.0", 0)
-        }
+        } else builder.addRoute("0.0.0.0", 0)
 
         if (MmkvManager.decodeSettingsBool(AppConfig.PREF_IPV6_ENABLED) == true) {
             builder.addAddress(vpnConfig.ipv6Client, 126)
             if (bypassLan) {
                 builder.addRoute("2000::", 3)
                 builder.addRoute("fc00::", 18)
-            } else {
-                builder.addRoute("::", 0)
-            }
+            } else builder.addRoute("::", 0)
         }
-
         SettingsManager.getVpnDnsServers().forEach {
-            if (Utils.isPureIpAddress(it)) {
-                builder.addDnsServer(it)
-            }
+            if (Utils.isPureIpAddress(it)) builder.addDnsServer(it)
         }
     }
 
@@ -223,28 +184,21 @@ class CoreVpnService : VpnService(), ServiceControl {
 
     private fun configurePerAppProxy(builder: Builder) {
         val selfPackageName = BuildConfig.APPLICATION_ID
-
         if (MmkvManager.decodeSettingsBool(AppConfig.PREF_PER_APP_PROXY) == false) {
             builder.addDisallowedApplication(selfPackageName)
             return
         }
-
         val apps = MmkvManager.decodeSettingsStringSet(AppConfig.PREF_PER_APP_PROXY_SET)
         if (apps.isNullOrEmpty()) {
             builder.addDisallowedApplication(selfPackageName)
             return
         }
-
         val bypassApps = MmkvManager.decodeSettingsBool(AppConfig.PREF_BYPASS_APPS)
         if (bypassApps) apps.add(selfPackageName) else apps.remove(selfPackageName)
-
         apps.forEach {
             try {
-                if (bypassApps) {
-                    builder.addDisallowedApplication(it)
-                } else {
-                    builder.addAllowedApplication(it)
-                }
+                if (bypassApps) builder.addDisallowedApplication(it)
+                else builder.addAllowedApplication(it)
             } catch (e: PackageManager.NameNotFoundException) {
                 LogUtil.e(AppConfig.TAG, "StartCore-VPN: Failed to configure app", e)
             }
@@ -259,33 +213,24 @@ class CoreVpnService : VpnService(), ServiceControl {
                 isRunningProvider = { isRunning },
                 restartCallback = { runTun2socks() }
             )
-        } else {
-            tun2SocksService = null
-        }
-
+        } else tun2SocksService = null
         tun2SocksService?.startTun2Socks()
     }
 
     private fun stopAllService(isForced: Boolean = true) {
         unlockStart()
         isRunning = false
-
         tun2SocksService?.stopTun2Socks()
         tun2SocksService = null
-
         RootLanSharing.stopClientSharing(this)
-
         CoreServiceManager.stopCoreLoop()
-
         if (isForced) {
             stopSelf()
-
             try {
                 Thread.sleep(100)
             } catch (e: InterruptedException) {
                 LogUtil.w(AppConfig.TAG, "StartCore-VPN: Sleep interrupted", e)
             }
-
             try {
                 if (::mInterface.isInitialized) {
                     mInterface.close()
@@ -311,13 +256,9 @@ class CoreVpnService : VpnService(), ServiceControl {
         try {
             val currentProfileId = MmkvManager.getSelectServer()
             if (currentProfileId.isNullOrEmpty()) return
-
             val currentProfile = MmkvManager.decodeServerConfig(currentProfileId)
-            
-            // Cek apakah user mencentang opsi SlowDNS di profil
             if (currentProfile != null && currentProfile.slowDnsEnabled) {
                 LogUtil.i(AppConfig.TAG, "StartCore-VPN: Starting SlowDNS for domain ${currentProfile.slowDnsDomain}")
-                
                 SlowDnsManager.start(
                     context = this,
                     domain = currentProfile.slowDnsDomain.orEmpty(),
