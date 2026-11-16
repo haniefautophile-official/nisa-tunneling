@@ -74,7 +74,11 @@ jobs:
           KS_ALIAS: ${{ secrets.APP_KEYSTORE_ALIAS }}
         run: |
           if [ -n "$KS_B64" ]; then
-            printf '%s' "$KS_B64" | tr -d '[:space:]' | base64 -d > "$RUNNER_TEMP/nisa.jks" || {
+            CLEAN=$(printf '%s' "$KS_B64" | tr -d '[:space:]')
+            echo "[diagnosa] panjang secret setelah dibersihkan: ${#CLEAN} karakter (normalnya sekitar 3000-4500)"
+            echo "[diagnosa] jumlah karakter bukan-base64: $(printf '%s' "$CLEAN" | tr -d 'A-Za-z0-9+/=' | wc -c) (harus 0)"
+            echo "[diagnosa] dua karakter awal: ${CLEAN:0:2} (harus MI)"
+            printf '%s' "$CLEAN" | base64 -d > "$RUNNER_TEMP/nisa.jks" || {
               echo "::error::Secret APP_KEYSTORE_BASE64 tidak valid. Salin ulang HANYA baris panjang base64 dari CARA_PAKAI.txt (tanpa teks lain)."
               exit 1
             }
