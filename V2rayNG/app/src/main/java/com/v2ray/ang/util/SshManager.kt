@@ -4,6 +4,8 @@ import android.content.Context
 import android.util.Log
 import com.v2ray.ang.dto.entities.ProfileItem
 import java.io.File
+import java.net.Inet4Address
+import java.net.InetAddress
 import kotlin.concurrent.thread
 
 /**
@@ -21,6 +23,19 @@ object SshManager {
     // Process.isAlive butuh API 26, sedangkan minSdk aplikasi 24.
     private fun alive(p: Process): Boolean =
         try { p.exitValue(); false } catch (_: IllegalThreadStateException) { true }
+
+    /**
+     * Binary Go statis di Android tidak punya /etc/resolv.conf, jadi tidak bisa resolve domain.
+     * Domain di-resolve di sini (DNS Android) lalu IP-nya diberikan ke helper.
+     */
+    private fun resolveIp(host: String): String {
+        if (host.contains(":") || host.matches(Regex("\\d{1,3}(\\.\\d{1,3}){3}"))) return host
+        val all = InetAddress.getAllByName(host)
+        return (all.firstOrNull { it is Inet4Address } ?: all.first()).hostAddress.orEmpty()
+    }
+
+    private fun hostPort(host: String, port: String) =
+        if (host.contains(":")) "[$host]:$port" else "$host:$port"
 
     @Synchronized
     fun start(context: Context, profile: ProfileItem) {
@@ -54,10 +69,27 @@ object SshManager {
             "-listen", "127.0.0.1:$SSH_LOCAL_PORT",
             "-known-hosts", knownHosts.absolutePath
         )
-        if (profile.slowDnsEnabled) {
-            cmd += listOf("-connect", "127.0.0.1:${SlowDnsManager.SLOW_DNS_LOCAL_PORT}")
-        } else if (!profile.sshProxy.isNullOrBlank()) {
-            cmd += listOf("-proxy", profile.sshProxy.orEmpty().trim())
+        try {
+            if (profile.slowDnsEnabled) {
+                cmd += listOf("-connect", "127.0.0.1:${SlowDnsManager.SLOW_DNS_LOCAL_PORT}")
+            } else if (!profile.sshProxy.isNullOrBlank()) {
+                // Format [user:pass@]host:port, host proxy di-resolve ke IP.
+                val raw = profile.sshProxy.orEmpty().trim()
+                val at = raw.lastIndexOf('@')
+                val auth = if (at >= 0) raw.substring(0, at + 1) else ""
+                val hp = raw.substring(at + 1)
+                val c = hp.lastIndexOf(':')
+                val pHost = if (c > 0) hp.substring(0, c) else hp
+                val pPort = if (c > 0) hp.substring(c + 1) else "80"
+                cmd += listOf("-proxy", auth + hostPort(resolveIp(pHost), pPort))
+            } else {
+                val ip = resolveIp(host)
+                Log.i(TAG, "SSH: $host -> $ip")
+                cmd += listOf("-connect", hostPort(ip, port))
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "SSH: gagal resolve domain ($host): ${e.message}")
+            return
         }
         if (profile.sshTls) {
             cmd += "-tls"
