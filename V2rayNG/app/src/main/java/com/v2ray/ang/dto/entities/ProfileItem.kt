@@ -21,6 +21,11 @@ data class ProfileItem(
     var slowDnsDomain: String? = null,
     var slowDnsPubkey: String? = null,
     var slowDnsDoh: String? = null,
+    // --- SSH: payload kustom, TLS/SNI, proxy HTTP ---
+    var sshPayload: String? = null,
+    var sshTls: Boolean = false,
+    var sshSni: String? = null,
+    var sshProxy: String? = null,
     // -------------------------
 
     var password: String? = null,
