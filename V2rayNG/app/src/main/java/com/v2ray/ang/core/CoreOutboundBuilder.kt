@@ -14,6 +14,7 @@ import com.v2ray.ang.util.HttpUtil
 import com.v2ray.ang.util.JsonUtil
 import com.v2ray.ang.util.LogUtil
 import com.v2ray.ang.util.SlowDnsManager
+import com.v2ray.ang.util.SshManager
 import com.v2ray.ang.util.Utils
 
 object CoreOutboundBuilder {
@@ -29,6 +30,7 @@ object CoreOutboundBuilder {
             EConfigType.HYSTERIA2 -> toOutboundHysteria2(profileItem)
             EConfigType.MASQUE -> toOutboundMasque(profileItem)
             EConfigType.HTTP -> toOutboundHttp(profileItem)
+            EConfigType.SSH -> toOutboundSsh(profileItem)
             else -> null
         }
 
@@ -176,6 +178,17 @@ object CoreOutboundBuilder {
                 settings.user = profileItem.username.orEmpty()
                 settings.pass = profileItem.password.orEmpty()
             }
+        }
+        return outboundBean
+    }
+
+    /** Profil SSH: core hanya meneruskan ke SOCKS5 lokal milik helper libsshsocks. */
+    private fun toOutboundSsh(profileItem: ProfileItem): OutboundBean? {
+        val outboundBean = createInitOutbound(EConfigType.SOCKS)
+        outboundBean?.settings?.let { settings ->
+            settings.address = "127.0.0.1"
+            settings.port = SshManager.SSH_LOCAL_PORT
+            settings.level = AppConfig.DEFAULT_LEVEL
         }
         return outboundBean
     }
