@@ -99,4 +99,5 @@ def screen(s):
     return s.replace(a, a + "            containerColor = androidx.compose.ui.graphics.Color.Transparent, // NISA_WALLPAPER\n")
 patch(f"{java}/ui/main/MainScreen.kt", screen)
 PY
+bash "$HERE/ui-cyber.sh"
 echo "branding selesai"
