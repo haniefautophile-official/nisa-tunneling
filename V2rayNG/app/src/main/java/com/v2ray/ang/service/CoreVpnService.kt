@@ -391,10 +391,9 @@ class CoreVpnService : VpnService(), ServiceControl {
      */
     private fun startSlowDnsIfNeeded() {
         try {
-            val currentProfileId = MmkvManager.decodeSettingsString(AppConfig.PREF_CURRENT_PROFILE_ID)
-            if (currentProfileId.isNullOrEmpty()) return
-
-            val currentProfile = MmkvManager.decodeServerConfig(currentProfileId)
+            // Mengambil profil yang sedang aktif
+            val currentProfile = MmkvManager.decodeServerConfig()
+            
             if (currentProfile != null && currentProfile.remarks.contains("SLOWDNS", ignoreCase = true)) {
                 
                 // Salin pubkey dari assets ke storage internal jika belum ada
