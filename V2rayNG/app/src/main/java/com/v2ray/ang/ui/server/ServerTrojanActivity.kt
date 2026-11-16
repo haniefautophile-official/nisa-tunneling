@@ -25,9 +25,7 @@ import androidx.compose.ui.unit.dp
 import com.v2ray.ang.R
 import com.v2ray.ang.dto.entities.ProfileItem
 import com.v2ray.ang.enums.EConfigType
-import com.v2ray.ang.handler.MmkvManager
 import com.v2ray.ang.ui.compose.FormTextField
-import com.v2ray.ang.util.Utils
 
 class ServerTrojanActivity : BaseServerActivity() {
 
@@ -49,31 +47,17 @@ class ServerTrojanActivity : BaseServerActivity() {
         var slowDnsEnabled by remember { mutableStateOf(initialConfig.slowDnsEnabled) }
         var slowDnsDomain by remember { mutableStateOf(initialConfig.slowDnsDomain ?: "") }
         var slowDnsPubkey by remember { mutableStateOf(initialConfig.slowDnsPubkey ?: "") }
-        var slowDnsDoh by remember { mutableStateOf(initialConfig.slowDnsDoh ?: "https://cloudflare-dns.com/dns-query") }
+        var slowDnsDoh by remember { mutableStateOf(initialConfig.slowDnsDoh ?: "") }
 
         ServerEditorScaffold(
             title = serverConfigType.toString(),
-            onSaveClick = { 
-                val profileItem = uiState.toProfileItem(initialConfig)
-                
-                // Simpan data SlowDNS langsung ke profil sebelum disimpan
-                profileItem.slowDnsEnabled = slowDnsEnabled
-                profileItem.slowDnsDomain = slowDnsDomain
-                profileItem.slowDnsPubkey = slowDnsPubkey
-                profileItem.slowDnsDoh = slowDnsDoh
-                
-                if (!validateProtocolConfig(profileItem)) {
-                    Utils.toast("Konfigurasi tidak valid")
-                    return@ServerEditorScaffold
-                }
-
-                val guid = profileItem.guid
-                if (MmkvManager.encodeServerConfig(guid, profileItem)) {
-                    Utils.toast("Berhasil disimpan")
-                    finish()
-                } else {
-                    Utils.toast("Gagal menyimpan")
-                }
+            onSaveClick = {
+                // toProfileItem() memakai initialConfig.copy(...), jadi kolom SlowDNS ikut tersimpan.
+                initialConfig.slowDnsEnabled = slowDnsEnabled
+                initialConfig.slowDnsDomain = slowDnsDomain
+                initialConfig.slowDnsPubkey = slowDnsPubkey
+                initialConfig.slowDnsDoh = slowDnsDoh
+                saveServer(uiState)
             }
         ) {
             CommonBasicFields(uiState)
@@ -85,7 +69,7 @@ class ServerTrojanActivity : BaseServerActivity() {
                 scope = scope,
                 buildProfileItem = { uiState.toProfileItem(initialConfig) }
             )
-            
+
             Spacer(modifier = Modifier.height(16.dp))
             Button(
                 onClick = { showSlowDnsDialog = true },
@@ -117,8 +101,12 @@ class ServerTrojanActivity : BaseServerActivity() {
     }
 
     override fun validateProtocolConfig(config: ProfileItem): Boolean {
-        if (config.password.isNullOrBlank()) return false
-        if (config.security.isNullOrBlank()) return false
+        if (config.password.isNullOrBlank()) {
+            return false
+        }
+        if (config.security.isNullOrBlank()) {
+            return false
+        }
         return true
     }
 
@@ -161,7 +149,6 @@ class ServerTrojanActivity : BaseServerActivity() {
                             modifier = Modifier.padding(top = 12.dp)
                         )
                     }
-
                     OutlinedTextField(
                         value = tempDomain,
                         onValueChange = { tempDomain = it },
@@ -169,7 +156,6 @@ class ServerTrojanActivity : BaseServerActivity() {
                         modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(modifier = Modifier.height(8.dp))
-
                     OutlinedTextField(
                         value = tempPubkey,
                         onValueChange = { tempPubkey = it },
@@ -177,28 +163,21 @@ class ServerTrojanActivity : BaseServerActivity() {
                         modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(modifier = Modifier.height(8.dp))
-
                     OutlinedTextField(
                         value = tempDoh,
                         onValueChange = { tempDoh = it },
-                        label = { Text("DoH URL (opsional)") },
+                        label = { Text("DNS / DoH (opsional)") },
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
             },
             confirmButton = {
-                TextButton(
-                    onClick = {
-                        onSave(tempEnabled, tempDomain, tempPubkey, tempDoh)
-                    }
-                ) {
+                TextButton(onClick = { onSave(tempEnabled, tempDomain, tempPubkey, tempDoh) }) {
                     Text("Simpan")
                 }
             },
             dismissButton = {
-                TextButton(onClick = onDismiss) {
-                    Text("Batal")
-                }
+                TextButton(onClick = onDismiss) { Text("Batal") }
             }
         )
     }
