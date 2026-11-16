@@ -20,6 +20,9 @@ jobs:
       - name: Rebrand ke NISA TUNNELING
         run: bash nisa/rebrand.sh
 
+      - name: Aktifkan enkripsi config (MMKV + Android Keystore)
+        run: bash nisa/encrypt-storage.sh
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
