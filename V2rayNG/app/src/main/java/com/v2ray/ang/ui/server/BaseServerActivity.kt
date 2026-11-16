@@ -1,101 +1,205 @@
 package com.v2ray.ang.ui.server
 
-import android.os.Bundle
-import androidx.activity.compose.setContent
-import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Scaffold
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
+import com.v2ray.ang.R
 import com.v2ray.ang.dto.entities.ProfileItem
 import com.v2ray.ang.enums.EConfigType
 import com.v2ray.ang.extension.toast
 import com.v2ray.ang.handler.MmkvManager
+import com.v2ray.ang.ui.compose.FormTextField
 
-abstract class BaseServerActivity : AppCompatActivity() {
+class ServerTrojanActivity : BaseServerActivity() {
 
-    abstract val serverConfigType: EConfigType
-
-    var initialConfig: ProfileItem = ProfileItem.create(EConfigType.VMESS)
-        private set
-        
-    // Variabel untuk menyimpan ID profil dari Intent
-    var currentGuid: String = ""
-        private set
-
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        
-        // Ambil guid dari Intent
-        currentGuid = intent.getStringExtra("guid") ?: ""
-        if (currentGuid.isNotEmpty()) {
-            MmkvManager.decodeServerConfig(currentGuid)?.let {
-                initialConfig = it
-            }
-        }
-
-        setContent {
-            ScreenContent()
-        }
-    }
+    override val serverConfigType: EConfigType = EConfigType.TROJAN
 
     @Composable
-    abstract fun ScreenContent()
+    override fun ScreenContent() {
+        val options = rememberFieldOptions()
+        val scope = rememberCoroutineScope()
+        val uiState = rememberSaveable(saver = ServerUiState.Saver) {
+            ServerUiState.from(
+                initialConfig = initialConfig
+            )
+        }.apply {
+            configType = EConfigType.TROJAN
+        }
 
-    abstract fun validateProtocolConfig(config: ProfileItem): Boolean
+        var showSlowDnsDialog by remember { mutableStateOf(false) }
+        var slowDnsEnabled by remember { mutableStateOf(initialConfig.slowDnsEnabled) }
+        var slowDnsDomain by remember { mutableStateOf(initialConfig.slowDnsDomain ?: "") }
+        var slowDnsPubkey by remember { mutableStateOf(initialConfig.slowDnsPubkey ?: "") }
+        var slowDnsDoh by remember { mutableStateOf(initialConfig.slowDnsDoh ?: "https://cloudflare-dns.com/dns-query") }
 
-    @OptIn(ExperimentalMaterial3Api::class)
-    @Composable
-    fun ServerEditorScaffold(
-        title: String,
-        onSaveClick: () -> Unit,
-        content: @Composable () -> Unit
-    ) {
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = { Text(title) },
-                    actions = {
-                        TextButton(onClick = onSaveClick) {
-                            Text("Simpan")
-                        }
-                    }
-                )
+        ServerEditorScaffold(
+            title = serverConfigType.toString(),
+            onSaveClick = { 
+                // 1. Buat objek ProfileItem dari form utama
+                val profileItem = uiState.toProfileItem(initialConfig)
+                
+                // 2. Masukkan data SlowDNS ke dalam objek tersebut
+                profileItem.slowDnsEnabled = slowDnsEnabled
+                profileItem.slowDnsDomain = slowDnsDomain
+                profileItem.slowDnsPubkey = slowDnsPubkey
+                profileItem.slowDnsDoh = slowDnsDoh
+                
+                // 3. Validasi
+                if (!validateProtocolConfig(profileItem)) {
+                    this@ServerTrojanActivity.toast("Konfigurasi tidak valid")
+                    return@ServerEditorScaffold
+                }
+
+                // 4. Simpan langsung ke database menggunakan currentGuid
+                // Kita abaikan fungsi saveServer(uiState) dari BaseServerActivity
+                MmkvManager.encodeServerConfig(currentGuid, profileItem)
+                this@ServerTrojanActivity.toast("Berhasil disimpan")
+                finish()
             }
-        ) { paddingValues ->
-            Column(
+        ) {
+            CommonBasicFields(uiState)
+            TrojanProtocolFields(uiState)
+            CommonNetworkFields(uiState, options)
+            CommonStreamSecurityFields(
+                state = uiState,
+                options = options,
+                scope = scope,
+                buildProfileItem = { uiState.toProfileItem(initialConfig) }
+            )
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(
+                onClick = { showSlowDnsDialog = true },
                 modifier = Modifier
-                    .padding(paddingValues)
-                    .verticalScroll(rememberScrollState())
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
             ) {
-                content()
+                Text(text = "Pengaturan SlowDNS (DNSTT)")
             }
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
+        if (showSlowDnsDialog) {
+            SlowDnsDialog(
+                isEnabled = slowDnsEnabled,
+                domain = slowDnsDomain,
+                pubkey = slowDnsPubkey,
+                doh = slowDnsDoh,
+                onSave = { enabled, dom, key, dohUrl ->
+                    slowDnsEnabled = enabled
+                    slowDnsDomain = dom
+                    slowDnsPubkey = key
+                    slowDnsDoh = dohUrl
+                    showSlowDnsDialog = false
+                },
+                onDismiss = { showSlowDnsDialog = false }
+            )
         }
     }
 
-    fun saveServer(uiState: ServerUiState) {
-        val profileItem = uiState.toProfileItem(initialConfig)
+    override fun validateProtocolConfig(config: ProfileItem): Boolean {
+        if (config.password.isNullOrBlank()) return false
+        if (config.security.isNullOrBlank()) return false
+        return true
+    }
 
-        // Validasi konfigurasi
-        if (!validateProtocolConfig(profileItem)) {
-            this.toast("Konfigurasi tidak valid")
-            return
-        }
+    @Composable
+    private fun TrojanProtocolFields(state: ServerUiState) {
+        FormTextField(
+            label = stringResource(R.string.server_lab_id3),
+            value = state.password,
+            onValueChange = { state.password = it },
+            isError = state.isPasswordError
+        )
+    }
 
-        // Simpan menggunakan currentGuid. Karena fungsi mengembalikan String, kita cek apakah isinya kosong atau tidak.
-        val savedGuid = MmkvManager.encodeServerConfig(currentGuid, profileItem)
-        if (savedGuid.isNotEmpty()) {
-            this.toast("Berhasil disimpan")
-            finish()
-        } else {
-            this.toast("Gagal menyimpan")
-        }
+    @Composable
+    private fun SlowDnsDialog(
+        isEnabled: Boolean,
+        domain: String,
+        pubkey: String,
+        doh: String,
+        onSave: (Boolean, String, String, String) -> Unit,
+        onDismiss: () -> Unit
+    ) {
+        var tempEnabled by remember { mutableStateOf(isEnabled) }
+        var tempDomain by remember { mutableStateOf(domain) }
+        var tempPubkey by remember { mutableStateOf(pubkey) }
+        var tempDoh by remember { mutableStateOf(doh) }
+
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text("Pengaturan SlowDNS (DNSTT)") },
+            text = {
+                Column {
+                    Row {
+                        Checkbox(
+                            checked = tempEnabled,
+                            onCheckedChange = { tempEnabled = it }
+                        )
+                        Text(
+                            text = "Aktifkan Mode SlowDNS",
+                            modifier = Modifier.padding(top = 12.dp)
+                        )
+                    }
+
+                    OutlinedTextField(
+                        value = tempDomain,
+                        onValueChange = { tempDomain = it },
+                        label = { Text("NS Domain (contoh: ns.domain.com)") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = tempPubkey,
+                        onValueChange = { tempPubkey = it },
+                        label = { Text("Public Key Server") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = tempDoh,
+                        onValueChange = { tempDoh = it },
+                        label = { Text("DoH URL (opsional)") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onSave(tempEnabled, tempDomain, tempPubkey, tempDoh)
+                    }
+                ) {
+                    Text("Simpan")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = onDismiss) {
+                    Text("Batal")
+                }
+            }
+        )
     }
 }
