@@ -16,6 +16,7 @@ enum class EConfigType(val value: Int, val protocolScheme: String) {
     HYSTERIA(900, AppConfig.HYSTERIA),
     HTTP(10, AppConfig.HTTP),
     MASQUE(11, AppConfig.MASQUE),
+    SSH(12, "ssh://"),
     POLICYGROUP(101, AppConfig.CUSTOM),
     PROXYCHAIN(102, AppConfig.CUSTOM),
     CUSTOM_OUTBOUND(103, AppConfig.CUSTOM);
