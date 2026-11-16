@@ -64,10 +64,13 @@ func main() {
 		HostKeyCallback: tofu(*fKnownHost, *fHost),
 		Timeout:         30 * time.Second,
 	}
+	// NewClientConn tidak memakai cfg.Timeout; tanpa batas ini helper menggantung bila server diam.
+	_ = conn.SetDeadline(time.Now().Add(30 * time.Second))
 	cc, chans, reqs, err := ssh.NewClientConn(conn, *fHost, cfg)
 	if err != nil {
 		log.Fatalf("SSH gagal: %v", err)
 	}
+	_ = conn.SetDeadline(time.Time{})
 	client := ssh.NewClient(cc, chans, reqs)
 	log.Printf("SSH tersambung ke %s sebagai %s", *fHost, *fUser)
 
@@ -253,17 +256,26 @@ func readHTTPReply(bc *bufConn) error {
 		return fmt.Errorf("balasan bukan HTTP: %q", status)
 	}
 	code, _ := strconv.Atoi(f[1])
+	var extra []string
 	for {
 		line, err := bc.r.ReadString('\n')
 		if err != nil {
 			return err
 		}
-		if strings.TrimSpace(line) == "" {
+		t := strings.TrimSpace(line)
+		if t == "" {
 			break
+		}
+		lt := strings.ToLower(t)
+		if strings.HasPrefix(lt, "location:") || strings.HasPrefix(lt, "server:") {
+			extra = append(extra, t)
 		}
 	}
 	log.Printf("balasan payload/proxy: %s", status)
 	if code < 100 || code >= 300 {
+		if len(extra) > 0 {
+			return fmt.Errorf("ditolak: %s [%s]", status, strings.Join(extra, " | "))
+		}
 		return fmt.Errorf("ditolak: %s", status)
 	}
 	return nil
