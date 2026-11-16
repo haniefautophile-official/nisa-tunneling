@@ -56,6 +56,25 @@ object SshManager {
         )
         if (profile.slowDnsEnabled) {
             cmd += listOf("-connect", "127.0.0.1:${SlowDnsManager.SLOW_DNS_LOCAL_PORT}")
+        } else if (!profile.sshProxy.isNullOrBlank()) {
+            cmd += listOf("-proxy", profile.sshProxy.orEmpty().trim())
+        }
+        if (profile.sshTls) {
+            cmd += "-tls"
+            if (!profile.sshSni.isNullOrBlank()) cmd += listOf("-sni", profile.sshSni.orEmpty().trim())
+        }
+        val payload = profile.sshPayload.orEmpty().trim()
+        if (payload.isNotEmpty()) {
+            try {
+                // Baris baru sungguhan dianggap [crlf]; placeholder lain dibaca oleh helper.
+                val normalized = payload.replace("\r\n", "\n").replace("\n", "[crlf]")
+                val payloadFile = File(context.filesDir, "ssh_payload.txt")
+                payloadFile.writeText(normalized)
+                cmd += listOf("-payload-file", payloadFile.absolutePath)
+            } catch (e: Exception) {
+                Log.e(TAG, "SSH: gagal menulis payload", e)
+                return
+            }
         }
 
         try {
