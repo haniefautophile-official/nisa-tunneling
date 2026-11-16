@@ -67,6 +67,9 @@ class ServerTrojanActivity : BaseServerActivity() {
                 tempSlowDnsPubkey = slowDnsPubkey
                 tempSlowDnsDoh = slowDnsDoh
                 
+                // Beri tahu BaseServerActivity bahwa data SlowDNS siap disimpan
+                hasTempSlowDns = true 
+                
                 saveServer(uiState) 
             }
         ) {
