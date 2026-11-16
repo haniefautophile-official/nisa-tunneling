@@ -118,8 +118,23 @@ def bottom(s):
     s = s.replace(sh, "                        .shadow(elevation = 10.dp, shape = CircleShape, ambientColor = Color(0xFF00E5FF), spotColor = Color(0xFF00E5FF)) // NISA_CYBER\n")
     bg = "                        .background(MaterialTheme.colorScheme.surfaceContainerHigh)\n"
     need(s, bg, "background bar")
-    return s.replace(bg, bg + "                        .border(1.dp, Color(0xFF00E5FF).copy(alpha = 0.6f), CircleShape)\n")
+    s = s.replace(bg, bg + "                        .border(1.dp, Color(0xFF00E5FF).copy(alpha = 0.6f), CircleShape)\n")
+    ta = "                            textAlign = TextAlign.Start,\n"
+    need(s, ta, "textAlign status")
+    return s.replace(ta, "                            color = Color(0xFFE6F6FF),\n" + ta)
 patch(f"{java}/ui/main/MainBottomBar.kt", bottom)
+
+# ---------- 6) Statistik Xray selalu menyala (penyebab grafik 0 B/s) ----------
+def coremgr(s):
+    if "NisaTraffic.SPEED_ON" in s:
+        return s
+    key = "MmkvManager.decodeSettingsBool(AppConfig.PREF_SPEED_ENABLED)"
+    assert s.count(key) == 2, f"PREF_SPEED_ENABLED di CoreConfigManager: harapan 2, ketemu {s.count(key)}"
+    s = s.replace(key, "NisaTraffic.SPEED_ON")
+    imp = "import com.v2ray.ang.util.PackageUidResolver\n"
+    need(s, imp, "import PackageUidResolver")
+    return s.replace(imp, imp + "import com.v2ray.ang.util.NisaTraffic\n")
+patch(f"{java}/core/CoreConfigManager.kt", coremgr)
 
 # ---------- 5) Sumber data kecepatan: NotificationManager ----------
 def notif(s):

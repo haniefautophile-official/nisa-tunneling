@@ -13,6 +13,9 @@ object NisaTraffic {
     const val EXTRA_UP = "nisa_up"
     const val EXTRA_DOWN = "nisa_down"
 
+    /** Statistik trafik Xray selalu menyala (dulu mengikuti pengaturan "kecepatan"). */
+    val SPEED_ON: Boolean? = true
+
     /** Kecepatan dalam byte per detik. */
     fun publish(context: Context?, up: Double, down: Double) {
         val c = context ?: return
