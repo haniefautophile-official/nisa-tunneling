@@ -25,7 +25,6 @@ import com.v2ray.ang.root.RootLanSharing
 import com.v2ray.ang.util.LogUtil
 import com.v2ray.ang.util.SlowDnsManager
 import com.v2ray.ang.util.Utils
-import java.io.File
 import java.lang.ref.SoftReference
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -62,9 +61,6 @@ class CoreVpnService : VpnService(), ServiceControl {
         }
         // ------------------------------------
 
-        // Ensure VPN interface is properly closed when the service is destroyed without
-        // going through stopAllService() (e.g. when killed unexpectedly). isRunning is
-        // set to false at the start of stopAllService(), so this guard prevents a double-close.
         if (isRunning) {
             try {
                 if (::mInterface.isInitialized) {
@@ -82,8 +78,6 @@ class CoreVpnService : VpnService(), ServiceControl {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         NotificationManager.ensureForeground()
-        // Always-on VPN restarts from OS deliver intent.action == SERVICE_INTERFACE or null intent.
-        // Reset any stuck start lock left by a killed process to allow setupVpnService() to run.
         val isSystemVpnStart = intent == null || intent.action == SERVICE_INTERFACE
         if (isSystemVpnStart) {
             unlockStart()
@@ -95,7 +89,6 @@ class CoreVpnService : VpnService(), ServiceControl {
         LogUtil.i(AppConfig.TAG, "StartCore-VPN: Service command received, systemVpnStart=$isSystemVpnStart")
         if (!setupVpnService()) {
             unlockStart()
-            // Stop service if setup fails to avoid infinite restart loops (START_STICKY)
             stopSelf()
             return START_NOT_STICKY
         }
@@ -123,7 +116,6 @@ class CoreVpnService : VpnService(), ServiceControl {
             return
         }
 
-        // Start LAN sharing if enabled in settings
         RootLanSharing.startClientSharing(this)
     }
 
@@ -144,10 +136,6 @@ class CoreVpnService : VpnService(), ServiceControl {
         super.attachBaseContext(context)
     }
 
-    /**
-     * Sets up the VPN service.
-     * Prepares the VPN and configures it if preparation is successful.
-     */
     private fun setupVpnService(): Boolean {
         val prepare = prepare(this)
         if (prepare != null) {
@@ -164,20 +152,12 @@ class CoreVpnService : VpnService(), ServiceControl {
         return true
     }
 
-    /**
-     * Configures the VPN service.
-     * @return True if the VPN service was configured successfully, false otherwise.
-     */
     private fun configureVpnService(): Boolean {
         val builder = Builder()
 
-        // Configure network settings (addresses, routing and DNS)
         configureNetworkSettings(builder)
-
-        // Configure app-specific settings (session name and per-app proxy)
         configurePerAppProxy(builder)
 
-        // Close the old interface since the parameters have been changed
         try {
             if (::mInterface.isInitialized) {
                 mInterface.close()
@@ -186,10 +166,8 @@ class CoreVpnService : VpnService(), ServiceControl {
             LogUtil.w(AppConfig.TAG, "Failed to close old interface", e)
         }
 
-        // Configure platform-specific features
         configurePlatformFeatures(builder)
 
-        // Create a new interface using the builder and save the parameters
         try {
             mInterface = builder.establish()!!
             isRunning = true
@@ -201,21 +179,13 @@ class CoreVpnService : VpnService(), ServiceControl {
         return false
     }
 
-    /**
-     * Configures the basic network settings for the VPN.
-     * This includes IP addresses, routing rules, and DNS servers.
-     *
-     * @param builder The VPN Builder to configure
-     */
     private fun configureNetworkSettings(builder: Builder) {
         val vpnConfig = SettingsManager.getCurrentVpnInterfaceAddressConfig()
         val bypassLan = SettingsManager.routingRulesetsBypassLan()
 
-        // Configure IPv4 settings
         builder.setMtu(SettingsManager.getVpnMtu())
         builder.addAddress(vpnConfig.ipv4Client, 30)
 
-        // Configure routing rules
         if (bypassLan) {
             AppConfig.ROUTED_IP_LIST.forEach {
                 val addr = it.split('/')
@@ -225,18 +195,16 @@ class CoreVpnService : VpnService(), ServiceControl {
             builder.addRoute("0.0.0.0", 0)
         }
 
-        // Configure IPv6 if enabled
         if (MmkvManager.decodeSettingsBool(AppConfig.PREF_IPV6_ENABLED) == true) {
             builder.addAddress(vpnConfig.ipv6Client, 126)
             if (bypassLan) {
-                builder.addRoute("2000::", 3) // Currently only 1/8 of total IPv6 is in use
-                builder.addRoute("fc00::", 18) // Xray-core default FakeIPv6 Pool
+                builder.addRoute("2000::", 3)
+                builder.addRoute("fc00::", 18)
             } else {
                 builder.addRoute("::", 0)
             }
         }
 
-        // Configure DNS servers
         SettingsManager.getVpnDnsServers().forEach {
             if (Utils.isPureIpAddress(it)) {
                 builder.addDnsServer(it)
@@ -244,13 +212,7 @@ class CoreVpnService : VpnService(), ServiceControl {
         }
     }
 
-    /**
-     * Configures platform-specific VPN features for different Android versions.
-     *
-     * @param builder The VPN Builder to configure
-     */
     private fun configurePlatformFeatures(builder: Builder) {
-        // Android Q (API 29) and above: Configure metering and HTTP proxy
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             builder.setMetered(false)
             if (MmkvManager.decodeSettingsBool(AppConfig.PREF_APPEND_HTTP_PROXY)) {
@@ -259,26 +221,14 @@ class CoreVpnService : VpnService(), ServiceControl {
         }
     }
 
-    /**
-     * Configures per-app proxy rules for the VPN builder.
-     *
-     * - If per-app proxy is not enabled, disallow the VPN service's own package.
-     * - If no apps are selected, disallow the VPN service's own package.
-     * - If bypass mode is enabled, disallow all selected apps (including self).
-     * - If proxy mode is enabled, only allow the selected apps (excluding self).
-     *
-     * @param builder The VPN Builder to configure.
-     */
     private fun configurePerAppProxy(builder: Builder) {
         val selfPackageName = BuildConfig.APPLICATION_ID
 
-        // If per-app proxy is not enabled, disallow the VPN service's own package and return
         if (MmkvManager.decodeSettingsBool(AppConfig.PREF_PER_APP_PROXY) == false) {
             builder.addDisallowedApplication(selfPackageName)
             return
         }
 
-        // If no apps are selected, disallow the VPN service's own package and return
         val apps = MmkvManager.decodeSettingsStringSet(AppConfig.PREF_PER_APP_PROXY_SET)
         if (apps.isNullOrEmpty()) {
             builder.addDisallowedApplication(selfPackageName)
@@ -286,16 +236,13 @@ class CoreVpnService : VpnService(), ServiceControl {
         }
 
         val bypassApps = MmkvManager.decodeSettingsBool(AppConfig.PREF_BYPASS_APPS)
-        // Handle the VPN service's own package according to the mode
         if (bypassApps) apps.add(selfPackageName) else apps.remove(selfPackageName)
 
         apps.forEach {
             try {
                 if (bypassApps) {
-                    // In bypass mode, disallow the selected apps
                     builder.addDisallowedApplication(it)
                 } else {
-                    // In proxy mode, only allow the selected apps
                     builder.addAllowedApplication(it)
                 }
             } catch (e: PackageManager.NameNotFoundException) {
@@ -304,10 +251,6 @@ class CoreVpnService : VpnService(), ServiceControl {
         }
     }
 
-    /**
-     * Runs the tun2socks process.
-     * Starts the tun2socks process with the appropriate parameters.
-     */
     private fun runTun2socks() {
         if (SettingsManager.isUsingHevTun()) {
             tun2SocksService = TProxyService(
@@ -364,42 +307,22 @@ class CoreVpnService : VpnService(), ServiceControl {
         LogUtil.w(AppConfig.TAG, "StartCore-VPN: unlockStart")
     }
 
-    /**
-     * Membaca profil aktif dan menyalakan SlowDNS jika diperlukan.
-     */
     private fun startSlowDnsIfNeeded() {
         try {
-            // Mengambil ID server yang sedang aktif/dipilih
             val currentProfileId = MmkvManager.getSelectServer()
-            
-            if (currentProfileId.isNullOrEmpty()) {
-                return
-            }
+            if (currentProfileId.isNullOrEmpty()) return
 
-            // Mengambil data profil berdasarkan ID tersebut
             val currentProfile = MmkvManager.decodeServerConfig(currentProfileId)
             
-            if (currentProfile != null && currentProfile.remarks.contains("SLOWDNS", ignoreCase = true)) {
+            // Cek apakah user mencentang opsi SlowDNS di profil
+            if (currentProfile != null && currentProfile.slowDnsEnabled) {
+                LogUtil.i(AppConfig.TAG, "StartCore-VPN: Starting SlowDNS for domain ${currentProfile.slowDnsDomain}")
                 
-                // Salin pubkey dari assets ke storage internal jika belum ada
-                val pubkeyFile = File(filesDir, "dnstt_pubkey.txt")
-                if (!pubkeyFile.exists()) {
-                    try {
-                        assets.open("dnstt_pubkey.txt").use { input ->
-                            pubkeyFile.outputStream().use { output ->
-                                input.copyTo(output)
-                            }
-                        }
-                    } catch (e: Exception) {
-                        LogUtil.e(AppConfig.TAG, "Failed to copy dnstt_pubkey.txt from assets", e)
-                    }
-                }
-
-                LogUtil.i(AppConfig.TAG, "StartCore-VPN: Starting SlowDNS for domain ${currentProfile.server}")
                 SlowDnsManager.start(
                     context = this,
-                    domain = currentProfile.server.orEmpty(),
-                    pubkey = pubkeyFile.absolutePath
+                    domain = currentProfile.slowDnsDomain.orEmpty(),
+                    pubkey = currentProfile.slowDnsPubkey.orEmpty(),
+                    doh = currentProfile.slowDnsDoh.orEmpty()
                 )
             }
         } catch (e: Exception) {
