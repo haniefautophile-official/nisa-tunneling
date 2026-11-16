@@ -1,27 +1,33 @@
 package com.v2ray.ang.util
 
 import android.content.Context
+import android.util.Log
 import java.io.File
+import kotlin.concurrent.thread
 
 object SlowDnsManager {
+    private const val TAG = "SlowDnsManager"
     private var process: Process? = null
-    const val SLOW_DNS_LOCAL_PORT = 10808
 
+    // Jangan 10808: itu port SOCKS bawaan aplikasi (AppConfig.PORT_SOCKS).
+    const val SLOW_DNS_LOCAL_PORT = 10899
+
+    @Synchronized
     fun start(context: Context, domain: String, pubkey: String, doh: String) {
-        if (process != null) return 
+        // Kalau proses lama sudah mati, boleh start ulang.
+        if (process?.isAlive == true) return
+        process = null
 
         val binaryPath = File(context.applicationInfo.nativeLibraryDir, "libdnstt.so").absolutePath
-        
-        // Simpan pubkey ke memori internal
+
         val pubkeyFile = File(context.filesDir, "dnstt_pubkey_temp.txt")
         try {
             pubkeyFile.writeText(pubkey.trim())
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e(TAG, "Gagal menulis pubkey", e)
             return
         }
 
-        // Susun perintah dnstt-client
         val command = listOf(
             binaryPath,
             "-doh", doh.ifEmpty { "https://cloudflare-dns.com/dns-query" },
@@ -31,14 +37,23 @@ object SlowDnsManager {
         )
 
         try {
-            val pb = ProcessBuilder(command)
-            pb.redirectErrorStream(true)
-            process = pb.start()
+            val p = ProcessBuilder(command).redirectErrorStream(true).start()
+            process = p
+            // Wajib dibaca terus: kalau tidak, buffer pipa penuh dan dnstt macet.
+            // Sekaligus menampilkan error/usage dnstt di logcat (tag SlowDnsManager).
+            thread(isDaemon = true, name = "dnstt-log") {
+                try {
+                    p.inputStream.bufferedReader().forEachLine { Log.i(TAG, it) }
+                } catch (_: Exception) {
+                }
+                Log.w(TAG, "dnstt berhenti")
+            }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e(TAG, "Gagal menjalankan dnstt", e)
         }
     }
 
+    @Synchronized
     fun stop() {
         process?.destroy()
         process = null
