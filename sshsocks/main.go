@@ -144,7 +144,7 @@ func dialChain() (net.Conn, error) {
 		_, hp := splitProxyAuth(*fProxy)
 		dest = hp
 	}
-	raw, err := net.DialTimeout("tcp", dest, 20*time.Second)
+	raw, err := dialAny(dest)
 	if err != nil {
 		return nil, err
 	}
@@ -188,7 +188,7 @@ func dialChain() (net.Conn, error) {
 			raw.Close()
 			return nil, err
 		}
-	} else if *fProxy != "" && *fConnect == "" {
+	} else if *fProxy != "" {
 		auth, _ := splitProxyAuth(*fProxy)
 		req := "CONNECT " + target + " HTTP/1.1\r\nHost: " + target + "\r\n"
 		if auth != "" {
@@ -205,6 +205,28 @@ func dialChain() (net.Conn, error) {
 		}
 	}
 	return bc, nil
+}
+
+// dialAny: coba setiap alamat (dipisah koma) berurutan; kembalikan sambungan pertama yang berhasil.
+func dialAny(list string) (net.Conn, error) {
+	var lastErr error
+	for _, a := range strings.Split(list, ",") {
+		a = strings.TrimSpace(a)
+		if a == "" {
+			continue
+		}
+		c, err := net.DialTimeout("tcp", a, 8*time.Second)
+		if err == nil {
+			log.Printf("tersambung ke %s", a)
+			return c, nil
+		}
+		log.Printf("gagal dial %s: %v", a, err)
+		lastErr = err
+	}
+	if lastErr == nil {
+		lastErr = fmt.Errorf("tidak ada alamat tujuan")
+	}
+	return nil, lastErr
 }
 
 func splitProxyAuth(s string) (auth, hostport string) {
