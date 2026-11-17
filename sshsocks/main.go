@@ -166,6 +166,9 @@ func dialChain() (net.Conn, error) {
 		}
 		_ = tc.SetDeadline(time.Time{})
 		conn = tc
+		log.Printf("TLS ok: sni=%s versi=0x%x", sni, tc.ConnectionState().Version)
+	} else {
+		log.Printf("TLS: tidak dipakai")
 	}
 
 	bc := &bufConn{Conn: conn, r: bufio.NewReader(conn)}
@@ -224,6 +227,11 @@ func expandPayload(s, host, port string) string {
 
 func sendPayload(c net.Conn, raw, host, port string) error {
 	exp := expandPayload(raw, host, port)
+	shown := exp
+	if len(shown) > 200 {
+		shown = shown[:200] + "..."
+	}
+	log.Printf("payload dikirim (%d byte): %q", len(exp), shown)
 	parts := strings.Split(exp, "[split]")
 	for i, p := range parts {
 		if p != "" {
@@ -248,7 +256,7 @@ func readHTTPReply(bc *bufConn) error {
 	}
 	status, err := bc.r.ReadString('\n')
 	if err != nil {
-		return fmt.Errorf("tidak ada balasan HTTP: %w", err)
+		return fmt.Errorf("tidak ada balasan HTTP (server menutup koneksi, TLS=%v): %w", *fTLS, err)
 	}
 	status = strings.TrimSpace(status)
 	f := strings.Fields(status)
