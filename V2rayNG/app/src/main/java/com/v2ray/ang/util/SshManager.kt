@@ -41,11 +41,16 @@ object SshManager {
      * Binary Go statis di Android tidak punya /etc/resolv.conf, jadi tidak bisa resolve domain.
      * Domain di-resolve di sini (DNS Android) lalu IP-nya diberikan ke helper.
      */
-    private fun resolveIp(host: String): String {
-        if (host.contains(":") || host.matches(Regex("\\d{1,3}(\\.\\d{1,3}){3}"))) return host
-        val all = InetAddress.getAllByName(host)
-        return (all.firstOrNull { it is Inet4Address } ?: all.first()).hostAddress.orEmpty()
+    /** Semua IP hasil DNS (IPv4 dulu, maksimal 6), supaya helper bisa mencoba satu per satu. */
+    private fun resolveAll(host: String): List<String> {
+        if (host.contains(":") || host.matches(Regex("\\d{1,3}(\\.\\d{1,3}){3}"))) return listOf(host)
+        val all = InetAddress.getAllByName(host).toList()
+        val ordered = all.filter { it is Inet4Address } + all.filter { it !is Inet4Address }
+        return ordered.mapNotNull { it.hostAddress }.take(6)
     }
+
+    private fun hostPortList(ips: List<String>, port: String) =
+        ips.joinToString(",") { hostPort(it, port) }
 
     private fun hostPort(host: String, port: String) =
         if (host.contains(":")) "[$host]:$port" else "$host:$port"
@@ -91,16 +96,18 @@ object SshManager {
                 // Format [user:pass@]host:port, host proxy di-resolve ke IP.
                 val raw = profile.sshProxy.orEmpty().trim()
                 val at = raw.lastIndexOf('@')
-                val auth = if (at >= 0) raw.substring(0, at + 1) else ""
                 val hp = raw.substring(at + 1)
                 val c = hp.lastIndexOf(':')
                 val pHost = if (c > 0) hp.substring(0, c) else hp
                 val pPort = if (c > 0) hp.substring(c + 1) else "80"
-                cmd += listOf("-proxy", auth + hostPort(resolveIp(pHost), pPort))
+                val pIps = resolveAll(pHost)
+                say(context, "SSH: proxy $pHost -> ${pIps.joinToString()}")
+                cmd += listOf("-proxy", raw)
+                cmd += listOf("-connect", hostPortList(pIps, pPort))
             } else {
-                val ip = resolveIp(host)
-                say(context, "SSH: $host -> $ip")
-                cmd += listOf("-connect", hostPort(ip, port))
+                val ips = resolveAll(host)
+                say(context, "SSH: $host -> ${ips.joinToString()}")
+                cmd += listOf("-connect", hostPortList(ips, port))
             }
         } catch (e: Exception) {
             say(context, "SSH: gagal resolve domain $host: ${e.message}")
