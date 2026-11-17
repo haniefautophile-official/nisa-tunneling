@@ -7,16 +7,22 @@ import android.content.IntentFilter
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -42,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.v2ray.ang.util.NisaTraffic
+import com.v2ray.ang.util.TunnelLog
 import java.util.Locale
 
 private val CyberCyan = Color(0xFF00E5FF)
@@ -69,6 +76,7 @@ fun NisaTrafficCard(isRunning: Boolean) {
     var peakDown by remember { mutableStateOf(0.0) }
     val upHistory = remember { mutableStateListOf<Float>() }
     val downHistory = remember { mutableStateListOf<Float>() }
+    var showLog by remember { mutableStateOf(false) }
 
     LaunchedEffect(isRunning) {
         if (!isRunning) {
@@ -127,14 +135,11 @@ fun NisaTrafficCard(isRunning: Boolean) {
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = "TRAFIK",
-                color = CyberCyan,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.Monospace,
-                letterSpacing = 3.sp
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TabLabel("TRAFIK", !showLog) { showLog = false }
+                Spacer(Modifier.width(16.dp))
+                TabLabel("LOG", showLog) { showLog = true }
+            }
             val chipColor = if (isRunning) CyberGreen else CyberMuted
             Text(
                 text = if (isRunning) "AKTIF" else "TIDAK AKTIF",
@@ -150,6 +155,10 @@ fun NisaTrafficCard(isRunning: Boolean) {
             )
         }
 
+        if (showLog) {
+            Spacer(Modifier.height(10.dp))
+            NisaLogView()
+        } else {
         Spacer(Modifier.height(10.dp))
 
         Row(
@@ -168,6 +177,53 @@ fun NisaTrafficCard(isRunning: Boolean) {
             modifier = Modifier
                 .fillMaxWidth()
                 .height(72.dp)
+        )
+        }
+    }
+}
+
+@Composable
+private fun TabLabel(text: String, selected: Boolean, onClick: () -> Unit) {
+    Text(
+        text = text,
+        color = if (selected) CyberCyan else CyberMuted,
+        fontSize = 13.sp,
+        fontWeight = FontWeight.Bold,
+        fontFamily = FontFamily.Monospace,
+        letterSpacing = 3.sp,
+        modifier = Modifier.clickable { onClick() }
+    )
+}
+
+/** Log tunnel SSH/SlowDNS dengan timestamp; otomatis menggulir ke baris terbaru. */
+@Composable
+private fun NisaLogView() {
+    val lines by TunnelLog.lines.collectAsState()
+    val scroll = rememberScrollState()
+    LaunchedEffect(lines.size) { scroll.animateScrollTo(scroll.maxValue) }
+    Column(modifier = Modifier.fillMaxWidth().height(190.dp)) {
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .verticalScroll(scroll)
+        ) {
+            Text(
+                text = if (lines.isEmpty()) "Belum ada log. Sambungkan profil SSH." else lines.joinToString("\n"),
+                color = CyberGreen,
+                fontSize = 11.sp,
+                lineHeight = 14.sp,
+                fontFamily = FontFamily.Monospace
+            )
+        }
+        Text(
+            text = "HAPUS LOG",
+            color = CyberMuted,
+            fontSize = 11.sp,
+            fontFamily = FontFamily.Monospace,
+            modifier = Modifier
+                .padding(top = 6.dp)
+                .clickable { TunnelLog.clear() }
         )
     }
 }
