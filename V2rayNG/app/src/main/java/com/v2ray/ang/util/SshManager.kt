@@ -124,6 +124,11 @@ object SshManager {
             }
         }
 
+        say(
+            context,
+            "SSH cfg: $hostPort tls=${profile.sshTls} sni=${profile.sshSni.orEmpty()} " +
+                "payload=${payload.length}c proxy=${!profile.sshProxy.isNullOrBlank()} slowdns=${profile.slowDnsEnabled}"
+        )
         try {
             val pb = ProcessBuilder(cmd).redirectErrorStream(true)
             pb.environment()["SSH_PASS"] = pass // lewat environment, bukan argumen proses
