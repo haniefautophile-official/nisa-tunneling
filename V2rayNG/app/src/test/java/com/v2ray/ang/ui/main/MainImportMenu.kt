@@ -2,21 +2,12 @@ package com.v2ray.ang.ui.main
 
 import androidx.annotation.StringRes
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.res.stringResource
 import com.v2ray.ang.R
 import com.v2ray.ang.dto.entities.ProfileItem
 import com.v2ray.ang.enums.EConfigType
 import com.v2ray.ang.extension.isComplexType
-import com.v2ray.ang.extension.toast
 import com.v2ray.ang.ui.compose.AppDropdownMenuItems
-import com.v2ray.ang.ui.compose.InputDialog
-import com.v2ray.ang.ui.compose.InputField
 import com.v2ray.ang.ui.compose.SelectListDialog
 
 private enum class ImportMenuAction(@StringRes val labelRes: Int, val action: MainAction) {
@@ -65,8 +56,14 @@ internal enum class ServerMenuAction(
 internal fun serverMenuActions(
     isComplexProfile: Boolean,
     includeManagementActions: Boolean,
+    isLocked: Boolean = false,
 ): List<ServerMenuAction> = ServerMenuAction.entries.filter { action ->
-    (includeManagementActions || action.isShareAction) && (!isComplexProfile || action.supportsComplexProfiles)
+    // Akun terkunci: isinya tidak boleh dilihat, diedit, atau dibagikan; hanya boleh dihapus
+    if (isLocked) {
+        includeManagementActions && action == ServerMenuAction.Delete
+    } else {
+        (includeManagementActions || action.isShareAction) && (!isComplexProfile || action.supportsComplexProfiles)
+    }
 }
 
 @Composable
@@ -84,7 +81,7 @@ fun MoreMenuContent(onSelected: (MainMoreMenuAction) -> Unit) = AppDropdownMenuI
 )
 
 @Composable
-fun ShareMethodDialog(
+internal fun ShareMethodDialog(
     guid: String,
     profile: ProfileItem,
     more: Boolean,
@@ -96,6 +93,7 @@ fun ShareMethodDialog(
     val menuActions = serverMenuActions(
         isComplexProfile = profile.configType.isComplexType(),
         includeManagementActions = more,
+        isLocked = profile.locked,
     )
     SelectListDialog(
         options = menuActions,
@@ -115,67 +113,22 @@ fun ShareMethodDialog(
     )
 }
 
-/** Cara membagikan akun; tiap cara lalu menanyakan standar (tanpa kunci) atau terenkripsi. */
+/** Cara membagikan akun; tiap cara lalu menanyakan standar (tanpa kunci) atau terkunci (isi akun disembunyikan). */
 internal enum class ShareKind { Link, File, QRCode }
 
-internal fun shareAction(kind: ShareKind, guid: String, password: String?): MainAction = when (kind) {
-    ShareKind.Link -> MainAction.ShareClipboard(guid, password)
-    ShareKind.File -> MainAction.ShareFile(guid, password)
-    ShareKind.QRCode -> MainAction.ShareQRCode(guid, password)
+internal fun shareAction(kind: ShareKind, guid: String, locked: Boolean): MainAction = when (kind) {
+    ShareKind.Link -> MainAction.ShareClipboard(guid, locked)
+    ShareKind.File -> MainAction.ShareFile(guid, locked)
+    ShareKind.QRCode -> MainAction.ShareQRCode(guid, locked)
 }
 
-internal const val MIN_SHARE_PASSWORD = 4
-
-internal fun isValidSharePassword(password: String, confirm: String): Boolean =
-    password.length >= MIN_SHARE_PASSWORD && password == confirm
-
 @Composable
-internal fun ShareModeDialog(onPlain: () -> Unit, onEncrypted: () -> Unit, onDismiss: () -> Unit) {
+internal fun ShareModeDialog(onPlain: () -> Unit, onLocked: () -> Unit, onDismiss: () -> Unit) {
     SelectListDialog(
         options = listOf(false, true),
-        optionText = { stringResource(if (it) R.string.nisa_share_encrypted else R.string.nisa_share_plain) },
+        optionText = { stringResource(if (it) R.string.nisa_share_locked else R.string.nisa_share_plain) },
         title = stringResource(R.string.nisa_share_mode_title),
-        onSelected = { encrypted -> if (encrypted) onEncrypted() else onPlain() },
-        onDismiss = onDismiss
-    )
-}
-
-@Composable
-internal fun SharePasswordDialog(onConfirm: (String) -> Unit, onDismiss: () -> Unit) {
-    var password by rememberSaveable { mutableStateOf("") }
-    var confirm by rememberSaveable { mutableStateOf("") }
-    val context = LocalContext.current
-    val invalidMessage = stringResource(R.string.nisa_password_invalid, MIN_SHARE_PASSWORD)
-    InputDialog(
-        title = stringResource(R.string.nisa_password_title),
-        fields = listOf(
-            InputField(stringResource(R.string.nisa_password_label), password, visualTransformation = PasswordVisualTransformation()),
-            InputField(stringResource(R.string.nisa_password_confirm), confirm, visualTransformation = PasswordVisualTransformation()),
-        ),
-        onFieldChange = { index, value -> if (index == 0) password = value else confirm = value },
-        confirmText = stringResource(R.string.action_ok),
-        dismissText = stringResource(R.string.action_cancel),
-        onConfirm = { if (isValidSharePassword(password, confirm)) onConfirm(password) else context.toast(invalidMessage) },
-        onDismiss = onDismiss
-    )
-}
-
-@Composable
-internal fun ImportPasswordDialog(isError: Boolean, onConfirm: (String) -> Unit, onDismiss: () -> Unit) {
-    var password by rememberSaveable { mutableStateOf("") }
-    InputDialog(
-        title = stringResource(R.string.nisa_import_password_title),
-        fields = listOf(
-            InputField(
-                stringResource(if (isError) R.string.nisa_import_password_wrong else R.string.nisa_password_label),
-                password,
-                visualTransformation = PasswordVisualTransformation()
-            )
-        ),
-        onFieldChange = { _, value -> password = value },
-        confirmText = stringResource(R.string.action_ok),
-        dismissText = stringResource(R.string.action_cancel),
-        onConfirm = { if (password.isNotEmpty()) onConfirm(password) },
+        onSelected = { locked -> if (locked) onLocked() else onPlain() },
         onDismiss = onDismiss
     )
 }
