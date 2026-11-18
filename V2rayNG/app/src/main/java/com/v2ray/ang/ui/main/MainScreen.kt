@@ -258,7 +258,7 @@ fun MainScreen(
                             onEditServer = { guid, profile -> onAction(MainAction.EditServer(guid, profile)) },
                             onShareServer = { guid, profile ->
                                 if (profile.locked) {
-                                    android.widget.Toast.makeText(context, R.string.nisa_locked_no_share, android.widget.Toast.LENGTH_SHORT).show()
+                                    android.widget.Toast.makeText(context, com.v2ray.ang.R.string.nisa_locked_no_share, android.widget.Toast.LENGTH_SHORT).show()
                                 } else {
                                     shareTarget = Triple(guid, profile, false)
                                 }
