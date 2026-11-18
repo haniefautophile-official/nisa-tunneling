@@ -84,7 +84,7 @@ fun MoreMenuContent(onSelected: (MainMoreMenuAction) -> Unit) = AppDropdownMenuI
 )
 
 @Composable
-fun ShareMethodDialog(
+internal fun ShareMethodDialog(
     guid: String,
     profile: ProfileItem,
     more: Boolean,
