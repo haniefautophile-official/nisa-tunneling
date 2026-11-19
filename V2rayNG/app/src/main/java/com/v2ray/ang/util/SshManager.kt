@@ -74,6 +74,7 @@ object SshManager {
     private fun supervise(ctx: Context, profile: ProfileItem, gen: Int) {
         var attempt = 0
         while (active(gen)) {
+            try { File(ctx.filesDir, "ssh_banner.txt").delete() } catch (_: Exception) { }
             val launched = launch(ctx, profile, gen)
             if (launched.fatal) return
             val p = launched.process
@@ -83,11 +84,16 @@ object SshManager {
                 try {
                     p.inputStream.bufferedReader().forEachLine { line ->
                         if (active(gen)) {
+                            // Banner server SSH disimpan untuk kotak log di layar utama
+                            val rawLine = line.removePrefix("[sshsocks] ")
+                            if (rawLine.startsWith("banner: ")) {
+                                try { File(ctx.filesDir, "ssh_banner.txt").appendText(rawLine.removePrefix("banner: ") + "\n") } catch (_: Exception) { }
+                            }
                             if (line.contains("SOCKS5 siap")) {
                                 connectedAt = System.currentTimeMillis()
                                 TunnelLog.add("Tersambung (SSH)")
                                 TunnelLog.detail("SSH: " + line.removePrefix("[sshsocks] "))
-                            } else if (!line.contains("forward ")) {
+                            } else if (!line.contains("forward ") && !rawLine.startsWith("banner: ")) {
                                 TunnelLog.essential("SSH: " + line.removePrefix("[sshsocks] "))
                             }
                         }
