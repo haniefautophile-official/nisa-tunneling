@@ -301,6 +301,7 @@ func readHTTPReply(bc *bufConn) error {
 	_ = bc.Conn.SetReadDeadline(time.Now().Add(15 * time.Second))
 	defer bc.Conn.SetReadDeadline(time.Time{})
 	skips := payloadReqs - 1
+	n := 0
 	for {
 		if head, err := bc.r.Peek(4); err == nil && string(head) == "SSH-" {
 			return nil
@@ -314,6 +315,7 @@ func readHTTPReply(bc *bufConn) error {
 		if len(f) < 2 || !strings.HasPrefix(f[0], "HTTP/") {
 			return fmt.Errorf("balasan bukan HTTP: %q", status)
 		}
+		n++
 		code, _ := strconv.Atoi(f[1])
 		var extra []string
 		var clen int64
@@ -349,9 +351,9 @@ func readHTTPReply(bc *bufConn) error {
 			continue
 		}
 		if len(extra) > 0 {
-			return fmt.Errorf("ditolak: %s [%s]", status, strings.Join(extra, " | "))
+			return fmt.Errorf("ditolak: %s [%s] (r2: balasan ke-%d, payload %d request)", status, strings.Join(extra, " | "), n, payloadReqs)
 		}
-		return fmt.Errorf("ditolak: %s", status)
+		return fmt.Errorf("ditolak: %s (r2: balasan ke-%d, payload %d request)", status, n, payloadReqs)
 	}
 }
 
@@ -459,4 +461,3 @@ func handleSocks(c net.Conn, cl *ssh.Client) {
 	go cp(c, remote)
 	wg.Wait()
 }
-
