@@ -56,11 +56,31 @@ object ServerProbe {
             var conn: Socket = s
             if (tls) {
                 val t2 = System.nanoTime()
-                val ssl = trustAll().socketFactory.createSocket(s, sniHost, port, true) as SSLSocket
-                ssl.soTimeout = 8000
-                ssl.startHandshake()
-                conn = ssl
-                TunnelLog.detail("$tag: TLS OK ${ssl.session.protocol} SNI=$sniHost (${(System.nanoTime() - t2) / 1_000_000} ms)")
+                try {
+                    val ssl = trustAll().socketFactory.createSocket(s, sniHost, port, true) as SSLSocket
+                    ssl.soTimeout = 8000
+                    ssl.startHandshake()
+                    conn = ssl
+                    TunnelLog.detail("$tag: TLS OK ${ssl.session.protocol} SNI=$sniHost (${(System.nanoTime() - t2) / 1_000_000} ms)")
+                } catch (e1: Exception) {
+                    // NISA_PROBE_TLS12_V1: ulangi dengan TLS 1.2 (ClientHello kecil). Kalau ini berhasil padahal
+                    // TLS bawaan HP macet, berarti ClientHello besar diblok jaringan (bukan server/akun).
+                    try { s.close() } catch (_: Exception) { }
+                    val s2 = Socket()
+                    socket = s2
+                    s2.connect(InetSocketAddress(ip, port), 6000)
+                    s2.soTimeout = 8000
+                    try {
+                        val ssl2 = trustAll().socketFactory.createSocket(s2, sniHost, port, true) as SSLSocket
+                        ssl2.enabledProtocols = arrayOf("TLSv1.2")
+                        ssl2.soTimeout = 8000
+                        ssl2.startHandshake()
+                        conn = ssl2
+                        TunnelLog.add("$tag: TLS bawaan HP GAGAL (${e1.javaClass.simpleName}) tetapi TLS 1.2 OK SNI=$sniHost -> ClientHello besar kemungkinan diblok jaringan")
+                    } catch (e2: Exception) {
+                        throw Exception("TLS bawaan: ${e1.javaClass.simpleName}; TLS 1.2: ${e2.javaClass.simpleName} ${e2.message} (SNI=$sniHost)")
+                    }
+                }
             }
 
             if (p.network.equals("ws", true)) {
