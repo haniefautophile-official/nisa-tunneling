@@ -1,5 +1,6 @@
 package com.v2ray.ang.handler
 
+import android.os.Looper
 import com.v2ray.ang.AppConfig
 import com.v2ray.ang.dto.CertSha256Request
 import com.v2ray.ang.dto.CertSha256Result
@@ -8,11 +9,40 @@ import com.v2ray.ang.enums.EConfigType
 import com.v2ray.ang.util.HttpUtil
 import com.v2ray.ang.util.JsonUtil
 import com.v2ray.ang.util.LogUtil
+import com.v2ray.ang.util.TunnelLog
 import com.v2ray.ang.util.Utils
 import libv2ray.Libv2ray
+import java.util.concurrent.ConcurrentHashMap
 
 object CertificateFingerprintManager {
     private const val TIMEOUT_MS = 5000L
+    private const val AUTO_PIN_TTL_MS = 5 * 60 * 1000L
+
+    /** Cache pin otomatis per server:port:sni supaya reload/handover dan tes massal tidak mengambil ulang. */
+    private val autoPinCache = ConcurrentHashMap<String, Pair<String, Long>>()
+
+    /**
+     * NISA_AUTO_PIN_V1: pin sertifikat otomatis, mengganti allowInsecure yang sudah dihapus core Xray 26.2.6+.
+     * Mengambil SHA-256 sertifikat yang benar-benar disajikan server (dengan SNI profil) lalu dipakai sebagai
+     * pinnedPeerCertSha256 di config runtime saja (profil tersimpan tidak berubah). Hasilnya sama seperti
+     * NetMod/HTTP Custom: nama dan rantai sertifikat tidak diperiksa, yang dicek hanya sertifikat itu sendiri.
+     * Hanya dipanggil dari thread non-UI; null berarti gagal/tidak berlaku dan pemanggil memakai jalur lama.
+     */
+    fun fetchForAutoPin(profile: ProfileItem, sni: String?): String? {
+        if (Looper.myLooper() == Looper.getMainLooper()) return null
+        if (profile.configType == EConfigType.HYSTERIA2 || profile.configType == EConfigType.MASQUE) return null
+        val key = "${profile.server.orEmpty().trim()}:${profile.serverPort.orEmpty().trim()}:${sni.orEmpty().lowercase()}"
+        val now = System.currentTimeMillis()
+        autoPinCache[key]?.let { (pin, at) -> if (now - at < AUTO_PIN_TTL_MS) return pin }
+        val pin = fetchForManualFill(profile.copy(sni = sni?.takeIf { it.isNotBlank() } ?: profile.sni))
+        if (pin == null) {
+            TunnelLog.detail("Pin sertifikat otomatis gagal diambil, memakai verifikasi nama biasa")
+            return null
+        }
+        autoPinCache[key] = pin to now
+        TunnelLog.detail("Sertifikat server di-pin otomatis (SHA-256 ${pin.take(12)}...), nama sertifikat tidak diperiksa")
+        return pin
+    }
 
     fun fetchForManualFill(profile: ProfileItem): String? {
         val request = buildRequest(profile) ?: return null
