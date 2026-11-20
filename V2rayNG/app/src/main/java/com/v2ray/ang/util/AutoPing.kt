@@ -29,6 +29,16 @@ object AutoPing {
     private var generation = 0
     private var logcatProcess: Process? = null
 
+    // NISA_CORE_ERR_V1: penyebab asli kegagalan dari log core, untuk toast tes koneksi
+    @Volatile
+    private var lastCoreError: String = ""
+    @Volatile
+    private var lastCoreErrorAt: Long = 0L
+
+    /** Baris [Error] terakhir dari core (maks 30 detik lalu). Null jika tidak ada / log core disembunyikan. */
+    fun recentCoreError(): String? =
+        if (lastCoreError.isNotEmpty() && System.currentTimeMillis() - lastCoreErrorAt < 30_000) lastCoreError else null
+
     @Synchronized
     fun start(context: Context, hideCoreLog: Boolean = false) {
         TunnelLog.init(context)
@@ -228,6 +238,10 @@ object AutoPing {
                                     TunnelLog.add("DNS: gagal lewat tunnel (aktifkan Log detail untuk rincian)")
                                 }
                                 return@forEachLine
+                            }
+                            if (e >= 0) {
+                                lastCoreError = msg.substringAfterLast(" > ").take(160)
+                                lastCoreErrorAt = now
                             }
                             if (msg != last || now - lastAt > 5000) {
                                 last = msg
