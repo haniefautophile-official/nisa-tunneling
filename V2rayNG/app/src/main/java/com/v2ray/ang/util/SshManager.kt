@@ -106,7 +106,8 @@ object SshManager {
                             }
                             if (line.contains("SOCKS5 siap")) {
                                 connectedAt = System.currentTimeMillis()
-                                TunnelLog.add("Tersambung")
+                                TunnelLog.add("SSH login berhasil, menguji internet...")
+                                AutoPing.verify()
                                 TunnelLog.detail("SSH: " + line.removePrefix("[sshsocks] "))
                             } else if (!line.contains("forward ") && !rawLine.startsWith("banner: ")) {
                                 TunnelLog.essential("SSH: " + line.removePrefix("[sshsocks] "))
