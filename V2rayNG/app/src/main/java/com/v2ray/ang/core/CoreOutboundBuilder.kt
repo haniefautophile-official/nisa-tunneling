@@ -475,7 +475,15 @@ object CoreOutboundBuilder {
         val tlsSetting = OutboundBean.StreamSettingsBean.TlsSettingsBean(
             allowInsecure = allowInsecure,
             serverName = sni.nullIfBlank(),
-            fingerprint = profileItem.fingerPrint.nullIfBlank(),
+            // NISA_SMALL_HELLO_V1: tanpa fingerprint, core Xray baru mengirim ClientHello +-1950 byte
+            // (key-share post-quantum + ECH) yang terpecah jadi 2 paket TCP dan macet di middlebox
+            // sebagian operator (tes koneksi: "context deadline exceeded"). NetMod/HTTP Custom kirim <600 byte.
+            // Untuk TLS + WebSocket/HTTPUpgrade yang fingerprint-nya kosong, pakai "edge" (+-517 byte, TLS 1.3).
+            // Fingerprint yang diisi pengguna tidak diubah.
+            fingerprint = profileItem.fingerPrint.nullIfBlank()
+                ?: if (streamSettings.security == AppConfig.TLS &&
+                    (streamSettings.network == NetworkType.WS.type || streamSettings.network == NetworkType.HTTP_UPGRADE.type)
+                ) "edge" else null,
             alpn = profileItem.alpn?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }.takeIf { !it.isNullOrEmpty() },
             echConfigList = profileItem.echConfigList.nullIfBlank(),
             verifyPeerCertByName = profileItem.verifyPeerCertByName.nullIfBlank() ?: autoVerifyName,
