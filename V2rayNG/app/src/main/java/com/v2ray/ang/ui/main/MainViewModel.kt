@@ -239,7 +239,9 @@ class MainViewModel(
             val detail = result.errorMessage.ifBlank {
                 dataSource.getString(R.string.connection_test_empty_message)
             }
-            dataSource.getString(R.string.connection_test_error, detail)
+            // NISA_CORE_ERR_V1: tampilkan penyebab asli dari log core (mis. kegagalan TLS)
+            val cause = com.v2ray.ang.util.AutoPing.recentCoreError()
+            dataSource.getString(R.string.connection_test_error, if (cause.isNullOrEmpty()) detail else "$detail\n$cause")
         }
 
         if (result.delayMillis < 0 || (result.country == null && result.ipAddress == null)) {
