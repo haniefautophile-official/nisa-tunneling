@@ -1,3 +1,6 @@
+Pembaruan 2.4.7:
+- V2ray dan Trojan (TLS + WebSocket/HTTPUpgrade) yang fingerprint-nya kosong kini memakai ClientHello kecil, tidak lagi macet di jaringan yang tidak bisa memproses paket TLS besar (tes koneksi: "context deadline exceeded").
+
 Pembaruan 2.4.6:
 - Jika tes koneksi gagal, pesan error sekarang menyertakan penyebab asli dari log core (misalnya kegagalan sertifikat TLS), bukan hanya "closed pipe".
 
