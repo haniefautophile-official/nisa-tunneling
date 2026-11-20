@@ -1,3 +1,6 @@
+Pembaruan 2.4.8:
+- Log "Tersambung" tidak lagi menyesatkan: sekarang baru muncul setelah ping lewat tunnel berhasil. Kalau server terhubung tapi internet tidak lewat, log menulis "Terhubung ke server, tapi internet tidak lewat tunnel".
+
 Pembaruan 2.4.7:
 - V2ray dan Trojan (TLS + WebSocket/HTTPUpgrade) yang fingerprint-nya kosong kini memakai ClientHello kecil, tidak lagi macet di jaringan yang tidak bisa memproses paket TLS besar (tes koneksi: "context deadline exceeded").
 - Cek server di tab LOG: kalau handshake TLS bawaan HP macet, otomatis dicoba ulang dengan TLS 1.2 dan hasilnya dicatat.
