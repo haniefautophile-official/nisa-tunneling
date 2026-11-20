@@ -9,6 +9,7 @@ import com.v2ray.ang.enums.EConfigType
 import com.v2ray.ang.enums.NetworkType
 import com.v2ray.ang.extension.isNotNullEmpty
 import com.v2ray.ang.extension.nullIfBlank
+import com.v2ray.ang.handler.CertificateFingerprintManager
 import com.v2ray.ang.handler.MmkvManager
 import com.v2ray.ang.util.HttpUtil
 import com.v2ray.ang.util.JsonUtil
@@ -478,8 +479,17 @@ object CoreOutboundBuilder {
                     .distinctBy { it.lowercase() }
                 if (extra.isEmpty()) null else (extra + sni).joinToString(",")
             } else null
+        // NISA_AUTO_PIN_V1: samakan dengan NetMod/HTTP Custom (tidak memeriksa nama sertifikat). Core Xray 26.2.6+
+        // tidak lagi mendukung allowInsecure, jadi sertifikat yang disajikan server di-pin otomatis tiap connect.
+        // Profil yang sudah mengisi pin atau verifyPeerCertByName tidak disentuh. Gagal ambil pin: jalur lama.
+        val autoPin: String? =
+            if (streamSettings.security == AppConfig.TLS
+                && profileItem.pinnedCA256.isNullOrEmpty()
+                && profileItem.verifyPeerCertByName.isNullOrBlank()
+                && !sni.isNullOrEmpty()
+            ) CertificateFingerprintManager.fetchForAutoPin(profileItem, sni) else null
         val tlsSetting = OutboundBean.StreamSettingsBean.TlsSettingsBean(
-            allowInsecure = allowInsecure,
+            allowInsecure = allowInsecure && autoPin == null,
             serverName = sni.nullIfBlank(),
             // NISA_SMALL_HELLO_V1: tanpa fingerprint, core Xray baru mengirim ClientHello +-1950 byte
             // (key-share post-quantum + ECH) yang terpecah jadi 2 paket TCP dan macet di middlebox
@@ -492,8 +502,8 @@ object CoreOutboundBuilder {
                 ) "edge" else null,
             alpn = profileItem.alpn?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }.takeIf { !it.isNullOrEmpty() },
             echConfigList = profileItem.echConfigList.nullIfBlank(),
-            verifyPeerCertByName = profileItem.verifyPeerCertByName.nullIfBlank() ?: autoVerifyName,
-            pinnedPeerCertSha256 = profileItem.pinnedCA256.nullIfBlank(),
+            verifyPeerCertByName = profileItem.verifyPeerCertByName.nullIfBlank() ?: if (autoPin == null) autoVerifyName else null,
+            pinnedPeerCertSha256 = profileItem.pinnedCA256.nullIfBlank() ?: autoPin,
             publicKey = profileItem.publicKey.nullIfBlank(),
             shortId = profileItem.shortId.nullIfBlank(),
             spiderX = profileItem.spiderX.nullIfBlank(),
