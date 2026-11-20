@@ -1,3 +1,8 @@
+Pembaruan 2.4.6:
+- Jika tes koneksi gagal, pesan error sekarang menyertakan penyebab asli dari log core (misalnya kegagalan sertifikat TLS), bukan hanya "closed pipe".
+
+Cara update: menu (tiga garis) > Check for update > unduh, lalu pasang di atas aplikasi lama. Akun tetap aman.
+
 Pembaruan 2.4.5:
 - SSH lewat proxy + payload di port 80 (GET lalu Upgrade) sekarang bisa tersambung.
 - Trojan dan V2ray di port 80 tanpa TLS bisa disimpan dan dipakai.
@@ -5,8 +10,6 @@ Pembaruan 2.4.5:
 - Ping bawaan www.google.com (204) seperti HTTP Custom; gstatic tidak dipakai lagi.
 - Log saat konek lebih singkat: cukup "Tersambung". Rincian ada di Pengaturan > Log detail.
 - DNS tidak lagi gagal saat SSH mencoba tersambung ulang.
-
-Cara update: menu (tiga garis) > Check for update > unduh, lalu pasang di atas aplikasi lama. Akun tetap aman.
 
 Fitur sebelumnya:
 Perbaikan ekspor/impor akun:
