@@ -1,3 +1,6 @@
+Pembaruan 2.4.11:
+- Perbaikan TLS dengan SNI palsu: sertifikat server kini dianggap sah juga jika cocok dengan Host WebSocket/HTTPUpgrade, jadi profil server IP atau bug host tidak lagi ditolak core ("certificate is valid for X, not ...").
+
 Pembaruan 2.4.10:
 - Log detail kini juga menampilkan penyebab kegagalan dari core (level info) di tab LOG, untuk mencari sebab V2Ray/Trojan tidak tersambung. Nyalakan di Pengaturan > Log detail.
 
