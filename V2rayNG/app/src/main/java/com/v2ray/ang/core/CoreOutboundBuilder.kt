@@ -462,16 +462,22 @@ object CoreOutboundBuilder {
         // sertifikat dianggap sah kalau cocok dengan host server ATAU SNI (dipisah koma; cukup
         // salah satu yang cocok). SNI yang dikirim tidak berubah. Profil yang sudah mengisi
         // verifyPeerCertByName atau pin sertifikat tidak disentuh.
+        // NISA_VERIFY_NAME_V3: daftar nama sah = host server (jika domain) + Host WS/HTTPUpgrade (jika domain) + SNI.
+        // Pola bug-host: server = IP/bug host, SNI palsu, sertifikat asli hanya cocok dengan Host WS.
+        // Tanpa Host WS di daftar, handshake ditolak core (x509: certificate is valid for X, not <sni>).
         val serverHost = profileItem.server.orEmpty().trim()
         val autoVerifyName: String? =
             if (streamSettings.security == AppConfig.TLS
                 && profileItem.pinnedCA256.isNullOrEmpty()
                 && profileItem.verifyPeerCertByName.isNullOrBlank()
-                && serverHost.isNotEmpty()
-                && Utils.isDomainName(serverHost)
                 && !sni.isNullOrEmpty()
-                && !sni.equals(serverHost, ignoreCase = true)
-            ) "$serverHost,$sni" else null
+            ) {
+                val hostNames = profileItem.host.orEmpty().split(",").map { it.trim() }
+                val extra = (listOf(serverHost) + hostNames)
+                    .filter { it.isNotEmpty() && Utils.isDomainName(it) && !it.equals(sni, ignoreCase = true) }
+                    .distinctBy { it.lowercase() }
+                if (extra.isEmpty()) null else (extra + sni).joinToString(",")
+            } else null
         val tlsSetting = OutboundBean.StreamSettingsBean.TlsSettingsBean(
             allowInsecure = allowInsecure,
             serverName = sni.nullIfBlank(),
