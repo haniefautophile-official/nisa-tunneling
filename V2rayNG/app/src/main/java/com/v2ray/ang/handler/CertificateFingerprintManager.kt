@@ -1,6 +1,5 @@
 package com.v2ray.ang.handler
 
-import android.os.Looper
 import com.v2ray.ang.AppConfig
 import com.v2ray.ang.dto.CertSha256Request
 import com.v2ray.ang.dto.CertSha256Result
@@ -13,10 +12,12 @@ import com.v2ray.ang.util.TunnelLog
 import com.v2ray.ang.util.Utils
 import libv2ray.Libv2ray
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.concurrent.thread
 
 object CertificateFingerprintManager {
     private const val TIMEOUT_MS = 5000L
     private const val AUTO_PIN_TTL_MS = 5 * 60 * 1000L
+    private const val AUTO_PIN_JOIN_MS = TIMEOUT_MS + 1500L
 
     /** Cache pin otomatis per server:port:sni supaya reload/handover dan tes massal tidak mengambil ulang. */
     private val autoPinCache = ConcurrentHashMap<String, Pair<String, Long>>()
@@ -26,22 +27,29 @@ object CertificateFingerprintManager {
      * Mengambil SHA-256 sertifikat yang benar-benar disajikan server (dengan SNI profil) lalu dipakai sebagai
      * pinnedPeerCertSha256 di config runtime saja (profil tersimpan tidak berubah). Hasilnya sama seperti
      * NetMod/HTTP Custom: nama dan rantai sertifikat tidak diperiksa, yang dicek hanya sertifikat itu sendiri.
-     * Hanya dipanggil dari thread non-UI; null berarti gagal/tidak berlaku dan pemanggil memakai jalur lama.
+     * Start core berjalan di main thread (onStartCommand), jadi pengambilan dilakukan di thread terpisah dan
+     * ditunggu paling lama AUTO_PIN_JOIN_MS. Null berarti gagal/tidak berlaku dan pemanggil memakai jalur lama.
      */
     fun fetchForAutoPin(profile: ProfileItem, sni: String?): String? {
-        if (Looper.myLooper() == Looper.getMainLooper()) return null
         if (profile.configType == EConfigType.HYSTERIA2 || profile.configType == EConfigType.MASQUE) return null
         val key = "${profile.server.orEmpty().trim()}:${profile.serverPort.orEmpty().trim()}:${sni.orEmpty().lowercase()}"
         val now = System.currentTimeMillis()
         autoPinCache[key]?.let { (pin, at) -> if (now - at < AUTO_PIN_TTL_MS) return pin }
-        val pin = fetchForManualFill(profile.copy(sni = sni?.takeIf { it.isNotBlank() } ?: profile.sni))
-        if (pin == null) {
-            TunnelLog.detail("Pin sertifikat otomatis gagal diambil, memakai verifikasi nama biasa")
+        val target = profile.copy(sni = sni?.takeIf { it.isNotBlank() } ?: profile.sni)
+        var pin: String? = null
+        // Menunggu di sini disengaja: core harus start dengan pin yang sudah ada supaya handshake pertama tidak
+        // gagal. Batas waktu eksplisit (AUTO_PIN_JOIN_MS) mencegah main thread tertahan tanpa batas; kalau lewat,
+        // pemanggil memakai jalur verifikasi nama lama. Aplikasi dikecualikan dari VPN, jadi dial langsung aman.
+        val worker = thread(isDaemon = true, name = "auto-pin") { pin = fetchForManualFill(target) }
+        worker.join(AUTO_PIN_JOIN_MS)
+        val result = pin
+        if (result == null) {
+            TunnelLog.add("Pin sertifikat otomatis gagal diambil, memakai verifikasi nama biasa")
             return null
         }
-        autoPinCache[key] = pin to now
-        TunnelLog.detail("Sertifikat server di-pin otomatis (SHA-256 ${pin.take(12)}...), nama sertifikat tidak diperiksa")
-        return pin
+        autoPinCache[key] = result to now
+        TunnelLog.add("Sertifikat server di-pin otomatis (SHA-256 ${result.take(12)}...), nama sertifikat tidak diperiksa")
+        return result
     }
 
     fun fetchForManualFill(profile: ProfileItem): String? {
