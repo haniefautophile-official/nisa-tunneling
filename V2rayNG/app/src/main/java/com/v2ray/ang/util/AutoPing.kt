@@ -54,8 +54,35 @@ object AutoPing {
         thread(isDaemon = true, name = "auto-ping") { loop(gen) }
     }
 
+    @Volatile
+    private var verifyGen = 0
+
+    /**
+     * Verifikasi koneksi: "Tersambung" hanya dicatat kalau ping lewat tunnel benar-benar berhasil.
+     * Kalau gagal semua percobaan, log menyatakan terhubung ke server tapi internet tidak lewat.
+     * Berjalan walau Auto ping dimatikan; tidak ikut generasi start/stop supaya aman dipanggil dari SSH.
+     */
+    fun verify() {
+        val g = ++verifyGen
+        thread(isDaemon = true, name = "nisa-verify") {
+            if (!pause(1500)) return@thread
+            repeat(4) { i ->
+                if (g != verifyGen) return@thread
+                if (ping(currentUrl())) {
+                    TunnelLog.add("Tersambung")
+                    return@thread
+                }
+                if (i < 3 && !pause(3000)) return@thread
+            }
+            if (g == verifyGen) {
+                TunnelLog.add("Terhubung ke server, tapi internet tidak lewat tunnel (tes gagal 4 kali)")
+            }
+        }
+    }
+
     @Synchronized
     fun stop() {
+        verifyGen++
         generation++
         try { logcatProcess?.destroy() } catch (_: Exception) { }
         logcatProcess = null
