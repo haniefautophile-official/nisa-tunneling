@@ -1,3 +1,6 @@
+Pembaruan 2.4.14:
+- File akun .nisa kini bisa dibuka langsung: dari Telegram atau file manager pilih "Buka dengan" lalu NISA TUNNELING, atau Bagikan file ke aplikasi. Akun otomatis diimpor dan layar utama terbuka.
+
 Pembaruan 2.4.13:
 - Perbaikan pin sertifikat otomatis (2.4.12 tidak aktif karena start core jalan di main thread). Sertifikat server kini diambil di thread terpisah sebelum core start, jadi profil TLS dengan SNI palsu tersambung tanpa mengisi nama verifikasi. Tab LOG menampilkan baris "Sertifikat server di-pin otomatis" atau "Pin sertifikat otomatis gagal diambil".
 
