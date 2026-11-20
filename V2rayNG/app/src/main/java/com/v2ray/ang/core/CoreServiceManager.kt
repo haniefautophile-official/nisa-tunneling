@@ -189,9 +189,12 @@ object CoreServiceManager {
         NotificationManager.startSpeedNotification()
         LogUtil.i(AppConfig.TAG, "StartCore-Manager: Core started successfully")
         // SSH baru dianggap tersambung setelah helper SSH siap (dicatat SshManager)
-        if (config.configType == com.v2ray.ang.enums.EConfigType.SSH) TunnelLog.detail("Core aktif")
-        else TunnelLog.add("Tersambung")
+        val isSsh = config.configType == com.v2ray.ang.enums.EConfigType.SSH
+        if (isSsh) TunnelLog.detail("Core aktif")
+        else TunnelLog.add("Core aktif, menguji internet...")
         AutoPing.start(service, hideCoreLog = config.locked)
+        // "Tersambung" baru dicatat setelah ping lewat tunnel berhasil (SSH: diverifikasi oleh SshManager)
+        if (!isSsh) AutoPing.verify()
         ServerProbe.run(config)
     }
 
