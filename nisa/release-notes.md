@@ -1,3 +1,6 @@
+Pembaruan 2.4.13:
+- Perbaikan pin sertifikat otomatis (2.4.12 tidak aktif karena start core jalan di main thread). Sertifikat server kini diambil di thread terpisah sebelum core start, jadi profil TLS dengan SNI palsu tersambung tanpa mengisi nama verifikasi. Tab LOG menampilkan baris "Sertifikat server di-pin otomatis" atau "Pin sertifikat otomatis gagal diambil".
+
 Pembaruan 2.4.12:
 - Profil TLS dengan SNI palsu kini langsung tersambung seperti di NetMod dan HTTP Custom: sertifikat yang disajikan server di-pin otomatis tiap connect, jadi nama sertifikat tidak lagi diperiksa dan tidak perlu mengisi "Verify peer certificate by name". Profil yang sudah mengisi pin atau nama verifikasi tidak berubah.
 
