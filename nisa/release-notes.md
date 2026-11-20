@@ -1,3 +1,6 @@
+Pembaruan 2.4.10:
+- Log detail kini juga menampilkan penyebab kegagalan dari core (level info) di tab LOG, untuk mencari sebab V2Ray/Trojan tidak tersambung. Nyalakan di Pengaturan > Log detail.
+
 Pembaruan 2.4.9:
 - Log "Tersambung" tidak lagi menyesatkan: sekarang baru muncul setelah ping lewat tunnel berhasil. Kalau server terhubung tapi internet tidak lewat, log menulis "Terhubung ke server, tapi internet tidak lewat tunnel".
 
