@@ -1,3 +1,6 @@
+Pembaruan 2.4.12:
+- Profil TLS dengan SNI palsu kini langsung tersambung seperti di NetMod dan HTTP Custom: sertifikat yang disajikan server di-pin otomatis tiap connect, jadi nama sertifikat tidak lagi diperiksa dan tidak perlu mengisi "Verify peer certificate by name". Profil yang sudah mengisi pin atau nama verifikasi tidak berubah.
+
 Pembaruan 2.4.11:
 - Perbaikan TLS dengan SNI palsu: sertifikat server kini dianggap sah juga jika cocok dengan Host WebSocket/HTTPUpgrade, jadi profil server IP atau bug host tidak lagi ditolak core ("certificate is valid for X, not ...").
 
