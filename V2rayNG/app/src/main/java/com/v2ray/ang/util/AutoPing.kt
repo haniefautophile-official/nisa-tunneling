@@ -57,6 +57,9 @@ object AutoPing {
     @Volatile
     private var verifyGen = 0
 
+    // Log detail menyala: baris [Info] core yang menyangkut kegagalan juga disalin ke tab LOG
+    private val infoWords = Regex("(?i)(fail|error|closed|reject|refus|reset|timeout|eof|handshake|certificate|websocket|bad status|invalid|context)")
+
     /**
      * Verifikasi koneksi: "Tersambung" hanya dicatat kalau ping lewat tunnel benar-benar berhasil.
      * Kalau gagal semua percobaan, log menyatakan terhubung ke server tapi internet tidak lewat.
@@ -254,7 +257,9 @@ object AutoPing {
                     p.inputStream.bufferedReader().forEachLine { raw ->
                         val w = raw.indexOf("[Warning]")
                         val e = raw.indexOf("[Error]")
-                        val i = if (w >= 0) w else e
+                        val inf = if (TunnelLog.isDetail()) raw.indexOf("[Info]") else -1
+                        val infoHit = inf >= 0 && infoWords.containsMatchIn(raw)
+                        val i = if (w >= 0) w else if (e >= 0) e else if (infoHit) inf else -1
                         if (i >= 0) {
                             val msg = raw.substring(i).take(220)
                             val now = System.currentTimeMillis()
