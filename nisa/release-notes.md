@@ -1,3 +1,6 @@
+Pembaruan 2.4.15:
+- Akun yang dibuka dari file .nisa, link, atau Bagikan kini langsung muncul di daftar profil, tanpa perlu menutup dan membuka ulang aplikasi.
+
 Pembaruan 2.4.14:
 - File akun .nisa kini bisa dibuka langsung: dari Telegram atau file manager pilih "Buka dengan" lalu NISA TUNNELING, atau Bagikan file ke aplikasi. Akun otomatis diimpor dan layar utama terbuka.
 
