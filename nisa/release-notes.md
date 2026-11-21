@@ -1,3 +1,10 @@
+Pembaruan 2.4.17:
+- SlowDNS kini tersedia untuk akun SSH. Di form SSH centang SlowDNS, lalu isi Type, NS Domain, Public Key, dan DNS.
+- Pilihan Type record: Otomatis, TXT, NULL, CNAME, NS, MX, SRV. "Otomatis" memakai TXT.
+- Kolom DNS menerima host:port untuk UDP langsung, atau alamat https:// untuk DoH.
+- Pengaturan SlowDNS ikut tersimpan, terbagikan lewat link dan file .nisa, serta terimpor kembali.
+- Tab LOG menampilkan status tunnel SlowDNS (session ready, stream ready) sebelum baris SSH.
+
 Pembaruan 2.4.16:
 - Perbaikan impor akun dari file .nisa, link, atau Bagikan: akun baru kini DITAMBAHKAN ke daftar, tidak lagi menimpa dan menghapus profil yang sudah ada.
 
