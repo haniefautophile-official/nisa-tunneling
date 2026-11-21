@@ -26,6 +26,7 @@ object SshFmt {
             config.slowDnsDomain.nullIfBlank()?.let { q["ns"] = it }
             config.slowDnsPubkey.nullIfBlank()?.let { q["pubkey"] = it }
             config.slowDnsDoh.nullIfBlank()?.let { q["doh"] = it }
+            config.slowDnsType.nullIfBlank()?.let { q["dnstype"] = it }
         }
         val query = if (q.isEmpty()) "" else "?" + q.entries.joinToString("&") { it.key + "=" + Utils.encodeURIComponent(it.value) }
         val user = Utils.encodeURIComponent(config.username.orEmpty()) + ":" + Utils.encodeURIComponent(config.password.orEmpty())
@@ -54,6 +55,7 @@ object SshFmt {
         c.slowDnsDomain = params["ns"].nullIfBlank()
         c.slowDnsPubkey = params["pubkey"].nullIfBlank()
         c.slowDnsDoh = params["doh"].nullIfBlank()
+        c.slowDnsType = params["dnstype"].nullIfBlank()
         return c
     }
 }
