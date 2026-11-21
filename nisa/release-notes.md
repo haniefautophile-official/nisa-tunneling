@@ -1,3 +1,6 @@
+Pembaruan 2.4.16:
+- Perbaikan impor akun dari file .nisa, link, atau Bagikan: akun baru kini DITAMBAHKAN ke daftar, tidak lagi menimpa dan menghapus profil yang sudah ada.
+
 Pembaruan 2.4.15:
 - Akun yang dibuka dari file .nisa, link, atau Bagikan kini langsung muncul di daftar profil, tanpa perlu menutup dan membuka ulang aplikasi.
 
