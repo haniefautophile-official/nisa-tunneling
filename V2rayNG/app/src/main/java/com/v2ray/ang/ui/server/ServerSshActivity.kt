@@ -19,6 +19,7 @@ import com.v2ray.ang.extension.toast
 import com.v2ray.ang.extension.toastSuccess
 import com.v2ray.ang.handler.AngConfigManager
 import com.v2ray.ang.handler.MmkvManager
+import com.v2ray.ang.ui.compose.FormDropdownField
 import com.v2ray.ang.ui.compose.FormTextField
 
 /** Profil SSH: kolom Host, Port, Username, Password terpisah, plus mode SlowDNS (DNSTT). */
@@ -44,6 +45,7 @@ class ServerSshActivity : BaseServerActivity() {
         var slowDnsDomain by rememberSaveable { mutableStateOf(initialConfig.slowDnsDomain ?: "") }
         var slowDnsPubkey by rememberSaveable { mutableStateOf(initialConfig.slowDnsPubkey ?: "") }
         var slowDnsDoh by rememberSaveable { mutableStateOf(initialConfig.slowDnsDoh ?: "") }
+        var slowDnsType by rememberSaveable { mutableStateOf(initialConfig.slowDnsType ?: "Otomatis") }
 
         var payloadEnabled by rememberSaveable { mutableStateOf(!initialConfig.sshPayload.isNullOrBlank()) }
         var sshPayload by rememberSaveable { mutableStateOf(initialConfig.sshPayload ?: "") }
@@ -57,7 +59,7 @@ class ServerSshActivity : BaseServerActivity() {
             onSaveClick = {
                 userError = username.isBlank()
                 saveSsh(
-                    uiState, username, slowDnsEnabled, slowDnsDomain, slowDnsPubkey, slowDnsDoh,
+                    uiState, username, slowDnsEnabled, slowDnsDomain, slowDnsPubkey, slowDnsDoh, slowDnsType,
                     if (payloadEnabled) sshPayload else "",
                     tlsEnabled, sshSni,
                     if (proxyEnabled && !slowDnsEnabled) sshProxy else ""
@@ -151,6 +153,12 @@ class ServerSshActivity : BaseServerActivity() {
                 Text("Aktifkan SlowDNS (DNSTT)")
             }
             if (slowDnsEnabled) {
+                FormDropdownField(
+                    "Type",
+                    slowDnsType,
+                    listOf("Otomatis", "TXT", "NULL", "CNAME", "NS", "MX", "SRV"),
+                    { slowDnsType = it }
+                )
                 FormTextField(
                     label = "NS Domain (contoh: ns.domain.com)",
                     value = slowDnsDomain,
@@ -162,7 +170,7 @@ class ServerSshActivity : BaseServerActivity() {
                     onValueChange = { slowDnsPubkey = it }
                 )
                 FormTextField(
-                    label = "DNS / DoH (opsional)",
+                    label = "DNS (host:port UDP, atau https:// untuk DoH)",
                     value = slowDnsDoh,
                     onValueChange = { slowDnsDoh = it }
                 )
@@ -177,6 +185,7 @@ class ServerSshActivity : BaseServerActivity() {
         slowDnsDomain: String,
         slowDnsPubkey: String,
         slowDnsDoh: String,
+        slowDnsType: String,
         payload: String,
         tls: Boolean,
         sni: String,
@@ -204,6 +213,7 @@ class ServerSshActivity : BaseServerActivity() {
             slowDnsDomain = slowDnsDomain.trim(),
             slowDnsPubkey = slowDnsPubkey.trim(),
             slowDnsDoh = slowDnsDoh.trim(),
+            slowDnsType = slowDnsType.trim().ifEmpty { null },
             sshPayload = payload.trim().ifEmpty { null },
             sshTls = tls,
             sshSni = sni.trim().ifEmpty { null },
