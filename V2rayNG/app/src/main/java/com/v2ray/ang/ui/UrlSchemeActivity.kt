@@ -33,39 +33,41 @@ class UrlSchemeActivity : BaseComponentActivity() {
             importNisaFile(fileUri)
             return
         }
-        try {
-            intent.apply {
-                if (action == Intent.ACTION_SEND) {
-                    if ("text/plain" == type) {
-                        intent.getStringExtra(Intent.EXTRA_TEXT)?.let {
-                            parseUri(it, null)
+        // Impor selesai dulu, baru layar utama dibuka, supaya daftar yang dimuat sudah berisi config baru.
+        lifecycleScope.launch {
+            try {
+                intent.apply {
+                    if (action == Intent.ACTION_SEND) {
+                        if ("text/plain" == type) {
+                            intent.getStringExtra(Intent.EXTRA_TEXT)?.let {
+                                parseUri(it, null)
+                            }
                         }
-                    }
-                } else if (action == Intent.ACTION_VIEW) {
-                    when (data?.host) {
-                        "install-config" -> {
-                            val uri: Uri? = intent.data
-                            val shareUrl = uri?.getQueryParameter("url").orEmpty()
-                            parseUri(shareUrl, uri?.fragment)
-                        }
+                    } else if (action == Intent.ACTION_VIEW) {
+                        when (data?.host) {
+                            "install-config" -> {
+                                val uri: Uri? = intent.data
+                                val shareUrl = uri?.getQueryParameter("url").orEmpty()
+                                parseUri(shareUrl, uri?.fragment)
+                            }
 
-                        "install-sub" -> {
-                            val uri: Uri? = intent.data
-                            val shareUrl = uri?.getQueryParameter("url").orEmpty()
-                            parseUri(shareUrl, uri?.fragment)
-                        }
+                            "install-sub" -> {
+                                val uri: Uri? = intent.data
+                                val shareUrl = uri?.getQueryParameter("url").orEmpty()
+                                parseUri(shareUrl, uri?.fragment)
+                            }
 
-                        else -> {
-                            toastError(R.string.toast_failure)
+                            else -> {
+                                toastError(R.string.toast_failure)
+                            }
                         }
                     }
                 }
+            } catch (e: Exception) {
+                LogUtil.e(AppConfig.TAG, "Error processing URL scheme", e)
             }
-
-            startActivity(Intent(this, MainActivity::class.java))
+            startActivity(Intent(this@UrlSchemeActivity, MainActivity::class.java))
             finish()
-        } catch (e: Exception) {
-            LogUtil.e(AppConfig.TAG, "Error processing URL scheme", e)
         }
     }
 
@@ -113,7 +115,7 @@ class UrlSchemeActivity : BaseComponentActivity() {
         }
     }
 
-    private fun parseUri(uriString: String?, fragment: String?) {
+    private suspend fun parseUri(uriString: String?, fragment: String?) {
         if (uriString.isNullOrEmpty()) {
             return
         }
@@ -126,15 +128,13 @@ class UrlSchemeActivity : BaseComponentActivity() {
                 decodedUrl += "#${fragment}"
             }
             LogUtil.i(AppConfig.TAG, decodedUrl)
-            lifecycleScope.launch(Dispatchers.IO) {
-                val (count, countSub) = AngConfigManager.importBatchConfig(decodedUrl, "", false)
-                withContext(Dispatchers.Main) {
-                    if (count + countSub > 0) {
-                        toast(R.string.import_subscription_success)
-                    } else {
-                        toast(R.string.import_subscription_failure)
-                    }
-                }
+            val (count, countSub) = withContext(Dispatchers.IO) {
+                AngConfigManager.importBatchConfig(decodedUrl, "", false)
+            }
+            if (count + countSub > 0) {
+                toast(R.string.import_subscription_success)
+            } else {
+                toast(R.string.import_subscription_failure)
             }
         }
     }
