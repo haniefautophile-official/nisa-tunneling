@@ -100,6 +100,14 @@ class MainActivity : HelperBaseComponentActivity() {
         checkAndRequestPermission(PermissionType.POST_NOTIFICATIONS) {}
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        // MainActivity singleTask: UrlSchemeActivity (file .nisa / link / bagikan) menyimpan config lalu
+        // membawa instance yang sudah ada ke depan tanpa onCreate. Tanpa muat ulang, daftar tetap
+        // versi lama sampai aplikasi ditutup dan dibuka lagi.
+        mainViewModel.onAction(MainAction.RefreshGroups)
+    }
+
     @Composable
     override fun ScreenContent() {
         BackHandler { moveTaskToBack(false) }
