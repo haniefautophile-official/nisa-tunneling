@@ -99,7 +99,7 @@ class UrlSchemeActivity : BaseComponentActivity() {
                     if (tooBig) null else out.toString(Charsets.UTF_8.name())
                 }
                 if (text.isNullOrBlank()) 0 else {
-                    val (configs, subs) = AngConfigManager.importBatchConfig(text, "", false)
+                    val (configs, subs) = AngConfigManager.importBatchConfig(text, "", true)
                     configs + subs
                 }
             } catch (e: Exception) {
@@ -129,7 +129,7 @@ class UrlSchemeActivity : BaseComponentActivity() {
             }
             LogUtil.i(AppConfig.TAG, decodedUrl)
             val (count, countSub) = withContext(Dispatchers.IO) {
-                AngConfigManager.importBatchConfig(decodedUrl, "", false)
+                AngConfigManager.importBatchConfig(decodedUrl, "", true)
             }
             if (count + countSub > 0) {
                 toast(R.string.import_subscription_success)
