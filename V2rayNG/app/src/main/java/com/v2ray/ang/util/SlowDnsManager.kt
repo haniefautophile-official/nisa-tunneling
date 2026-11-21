@@ -61,7 +61,11 @@ object SlowDnsManager {
 
         try {
             TunnelLog.detail("SlowDNS: memulai ${domain.trim()}")
-            val p = ProcessBuilder(command).redirectErrorStream(true).start()
+            val pb = ProcessBuilder(command).redirectErrorStream(true)
+            // Klien Go dibuild untuk linux, jadi tidak tahu lokasi CA Android. Tanpa ini DoH/DoT gagal
+            // dengan "x509: certificate signed by unknown authority".
+            pb.environment()["SSL_CERT_DIR"] = "/apex/com.android.conscrypt/cacerts:/system/etc/security/cacerts"
+            val p = pb.start()
             process = p
             currentKey = key
             // Wajib dibaca terus: kalau tidak, buffer pipa penuh dan dnstt macet.
@@ -97,17 +101,38 @@ object SlowDnsManager {
         return ip ?: host
     }
 
+    /** Penyedia DNS umum: sertifikatnya memuat alamat IP, jadi aman dipanggil lewat IP. */
+    private val KNOWN_RESOLVER_IPS = mapOf(
+        "dns.google" to "8.8.8.8",
+        "cloudflare-dns.com" to "1.1.1.1",
+        "one.one.one.one" to "1.1.1.1",
+        "dns.quad9.net" to "9.9.9.9"
+    )
+
+    private fun hostToIp(host: String): String =
+        KNOWN_RESOLVER_IPS[host.lowercase()] ?: resolveHost(host)
+
+    /** Klien Go di Android tidak bisa resolve nama, jadi host pada URL DoH diganti alamat IP-nya. */
+    private fun dohUrlWithIp(url: String): String {
+        val m = Regex("^(https://)([^/:\\[]+)(.*)$", RegexOption.IGNORE_CASE).find(url) ?: return url
+        val host = m.groupValues[2]
+        if (host.matches(Regex("\\d{1,3}(\\.\\d{1,3}){3}"))) return url
+        return m.groupValues[1] + hostToIp(host) + m.groupValues[3]
+    }
+
     private fun withPort(hostPort: String, defaultPort: Int): String =
         if (Regex(".*:\\d+$").matches(hostPort)) hostPort else "$hostPort:$defaultPort"
 
-    /** Kosong = DoH Cloudflare (perilaku lama). https:// = DoH, tls:// atau dot:// = DoT, lainnya = UDP host[:port]. */
+    /** Kosong = DoH Cloudflare lewat IP 1.1.1.1. https:// = DoH, tls:// atau dot:// = DoT, lainnya = UDP host[:port]. */
     private fun resolverArgs(raw: String): List<String> {
         val r = raw.trim()
-        if (r.isEmpty()) return listOf("-doh", "https://cloudflare-dns.com/dns-query")
+        if (r.isEmpty()) return listOf("-doh", "https://1.1.1.1/dns-query")
         return when {
-            r.startsWith("https://", ignoreCase = true) -> listOf("-doh", r)
+            r.startsWith("https://", ignoreCase = true) -> listOf("-doh", dohUrlWithIp(r))
             r.startsWith("tls://", ignoreCase = true) || r.startsWith("dot://", ignoreCase = true) ->
-                listOf("-dot", withPort(r.substringAfter("://"), 853))
+                withPort(r.substringAfter("://"), 853).let { hp ->
+                    listOf("-dot", "${hostToIp(hp.substringBeforeLast(":"))}:${hp.substringAfterLast(":")}")
+                }
             else -> {
                 val hostPort = withPort(r.removePrefix("udp://").removePrefix("UDP://"), 53)
                 val host = hostPort.substringBeforeLast(":")
