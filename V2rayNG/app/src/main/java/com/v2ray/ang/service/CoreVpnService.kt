@@ -284,7 +284,8 @@ class CoreVpnService : VpnService(), ServiceControl {
                     context = this,
                     domain = currentProfile.slowDnsDomain.orEmpty(),
                     pubkey = currentProfile.slowDnsPubkey.orEmpty(),
-                    doh = currentProfile.slowDnsDoh.orEmpty()
+                    doh = currentProfile.slowDnsDoh.orEmpty(),
+                    recordType = currentProfile.slowDnsType.orEmpty()
                 )
             } else {
                 // Profil ini tidak memakai SlowDNS (misalnya VMess/Trojan biasa): pastikan dnstt
