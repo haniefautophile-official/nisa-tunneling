@@ -151,6 +151,10 @@ jobs:
           FILES=$(ls V2rayNG/app/build/outputs/apk/playstore/release/*.apk)
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" $FILES --clobber
+            # Sinkronkan judul + catatan rilis dengan nisa/release-notes.md
+            # supaya edit catatan di repo ikut tampil di rilis yang sudah ada.
+            gh release edit "$TAG" --title "NISA TUNNELING ${VERSION}" \
+              --notes-file nisa/release-notes.md --latest
           else
             gh release create "$TAG" $FILES --title "NISA TUNNELING ${VERSION}" \
               --notes-file nisa/release-notes.md --target "$GITHUB_SHA" --latest
