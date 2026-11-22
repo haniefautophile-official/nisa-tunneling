@@ -1,7 +1,7 @@
 Pembaruan 2.4.18:
 - Perbaikan SlowDNS lewat DoH (https://) dan DoT (tls://): nama host DNS kini di-resolve di dalam aplikasi dan sertifikat CA Android dipakai, jadi tidak lagi gagal dengan error "unknown authority" atau "lookup ... connection refused".
 - Kolom DNS yang dikosongkan kini memakai DoH Cloudflare lewat alamat IP (1.1.1.1).
-- Di jaringan yang memblokir UDP 53 langsung ke server, coba isi kolom DNS dengan alamat DoH, misalnya https://dns.google/dns-query.
+- Di jaringan yang memblokir UDP 53 langsung ke server, coba isi kolom DNS dengan alamat DoH, misalnya [https://dns.google/dns-query](http://cp.cloudflare.com/generate_204).
 
 Pembaruan 2.4.17:
 - SlowDNS kini tersedia untuk akun SSH. Di form SSH centang SlowDNS, lalu isi Type, NS Domain, Public Key, dan DNS.
