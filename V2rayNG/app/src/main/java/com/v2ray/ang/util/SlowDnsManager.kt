@@ -50,7 +50,7 @@ object SlowDnsManager {
 
         // Klien VayDNS (libdnstt.so) dalam mode kompatibel dnstt, supaya cocok dengan server dnstt.
         val command = mutableListOf(binaryPath, "-dnstt-compat", "-record-type", type)
-        val resolver = resolverArgs(doh)
+        val resolver = resolverArgs(context, doh)
         command += resolver
         command += listOf(
             "-pubkey-file", pubkeyFile.absolutePath,
@@ -120,14 +120,53 @@ object SlowDnsManager {
         return m.groupValues[1] + hostToIp(host) + m.groupValues[3]
     }
 
+    /**
+     * "sistem": pakai DNS resolver milik jaringan yang sedang dipakai HP (operator atau Wi-Fi),
+     * di luar VPN. Operator seluler biasanya hanya meneruskan UDP 53 ke resolvernya sendiri.
+     */
+    private fun systemResolverArgs(context: Context): List<String> {
+        val fallback = listOf("-doh", "https://1.1.1.1/dns-query")
+        val chosen: String? = try {
+            val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager
+            if (cm == null) null else {
+                val found = mutableListOf<Pair<Int, String>>()
+                for (n in cm.allNetworks) {
+                    val caps = cm.getNetworkCapabilities(n) ?: continue
+                    if (caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN)) continue
+                    if (!caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)) continue
+                    val ip = cm.getLinkProperties(n)?.dnsServers.orEmpty()
+                        .filterIsInstance<Inet4Address>().firstOrNull()?.hostAddress ?: continue
+                    // Wi-Fi didahulukan (itu jalur utama kalau tersambung), lalu seluler, lalu lainnya.
+                    val rank = when {
+                        caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) -> 0
+                        caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR) -> 1
+                        else -> 2
+                    }
+                    found += rank to ip
+                }
+                found.minByOrNull { it.first }?.second
+            }
+        } catch (e: Exception) {
+            TunnelLog.add("SlowDNS: gagal membaca DNS sistem: ${e.message}")
+            null
+        }
+        if (chosen == null) {
+            TunnelLog.add("SlowDNS: DNS sistem tidak ditemukan, memakai DoH 1.1.1.1")
+            return fallback
+        }
+        TunnelLog.add("SlowDNS: DNS sistem $chosen")
+        return listOf("-udp", "$chosen:53")
+    }
+
     private fun withPort(hostPort: String, defaultPort: Int): String =
         if (Regex(".*:\\d+$").matches(hostPort)) hostPort else "$hostPort:$defaultPort"
 
-    /** Kosong = DoH Cloudflare lewat IP 1.1.1.1. https:// = DoH, tls:// atau dot:// = DoT, lainnya = UDP host[:port]. */
-    private fun resolverArgs(raw: String): List<String> {
+    /** Kosong = DoH Cloudflare lewat IP 1.1.1.1. "sistem" = DNS jaringan HP. https:// = DoH, tls:// atau dot:// = DoT, lainnya = UDP host[:port]. */
+    private fun resolverArgs(context: Context, raw: String): List<String> {
         val r = raw.trim()
         if (r.isEmpty()) return listOf("-doh", "https://1.1.1.1/dns-query")
         return when {
+            r.equals("sistem", ignoreCase = true) || r.equals("system", ignoreCase = true) -> systemResolverArgs(context)
             r.startsWith("https://", ignoreCase = true) -> listOf("-doh", dohUrlWithIp(r))
             r.startsWith("tls://", ignoreCase = true) || r.startsWith("dot://", ignoreCase = true) ->
                 withPort(r.substringAfter("://"), 853).let { hp ->
