@@ -1,8 +1,11 @@
+Pembaruan 2.4.20:
+- SlowDNS: waktu tunggu login SSH diperpanjang menjadi 120 detik, karena jabat tangan SSH lewat DNS lambat dan sebelumnya bisa terputus di tengah jalan. Setelah menekan sambung, tunggu sampai muncul "Tersambung".
+
+Cara update: menu (tiga garis) > Check for update > unduh, lalu pasang di atas aplikasi lama. Akun tetap aman.
+
 Pembaruan 2.4.19:
 - SlowDNS: kolom DNS yang dikosongkan kini memakai DNS operator (UDP 53), bukan DoH Cloudflare, supaya bisa jalan tanpa kuota di XL dan Axis. Mohon dicoba dan laporkan hasilnya.
 - Ingin tetap memakai DoH? Isi kolom DNS dengan https://1.1.1.1/dns-query.
-
-Cara update: menu (tiga garis) > Check for update > unduh, lalu pasang di atas aplikasi lama. Akun tetap aman.
 
 Pembaruan 2.4.18:
 - Perbaikan SlowDNS lewat DoH (https://) dan DoT (tls://): nama host DNS kini di-resolve di dalam aplikasi dan sertifikat CA Android dipakai, jadi tidak lagi gagal dengan error "unknown authority" atau "lookup ... connection refused".
