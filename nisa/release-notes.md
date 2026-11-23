@@ -1,3 +1,9 @@
+Pembaruan 2.4.19:
+- SlowDNS: kolom DNS yang dikosongkan kini memakai DNS operator (UDP 53), bukan DoH Cloudflare, supaya bisa jalan tanpa kuota di XL dan Axis. Mohon dicoba dan laporkan hasilnya.
+- Ingin tetap memakai DoH? Isi kolom DNS dengan https://1.1.1.1/dns-query.
+
+Cara update: menu (tiga garis) > Check for update > unduh, lalu pasang di atas aplikasi lama. Akun tetap aman.
+
 Pembaruan 2.4.18:
 - Perbaikan SlowDNS lewat DoH (https://) dan DoT (tls://): nama host DNS kini di-resolve di dalam aplikasi dan sertifikat CA Android dipakai, jadi tidak lagi gagal dengan error "unknown authority" atau "lookup ... connection refused".
 - Kolom DNS yang dikosongkan kini memakai DoH Cloudflare lewat alamat IP (1.1.1.1).
@@ -42,8 +48,6 @@ Pembaruan 2.4.7:
 
 Pembaruan 2.4.6:
 - Jika tes koneksi gagal, pesan error sekarang menyertakan penyebab asli dari log core (misalnya kegagalan sertifikat TLS), bukan hanya "closed pipe".
-
-Cara update: menu (tiga garis) > Check for update > unduh, lalu pasang di atas aplikasi lama. Akun tetap aman.
 
 Pembaruan 2.4.5:
 - SSH lewat proxy + payload di port 80 (GET lalu Upgrade) sekarang bisa tersambung.
