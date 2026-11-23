@@ -8,6 +8,7 @@ import androidx.compose.ui.res.stringResource
 import com.v2ray.ang.R
 import com.v2ray.ang.dto.entities.ProfileItem
 import com.v2ray.ang.enums.EConfigType
+import com.v2ray.ang.extension.toast
 import com.v2ray.ang.ui.compose.FormDropdownField
 import com.v2ray.ang.ui.compose.FormTextField
 
@@ -28,9 +29,18 @@ class ServerVlessActivity : BaseServerActivity() {
         }
         val flowOptions = stringArrayResource(R.array.flows).toList()
 
+        val slowDns = rememberSlowDnsFormState(initialConfig)
+
         ServerEditorScaffold(
             title = serverConfigType.toString(),
-            onSaveClick = { saveServer(uiState) }
+            onSaveClick = {
+                if (!slowDns.isValid()) {
+                    toast("NS Domain dan Public Key SlowDNS wajib diisi")
+                } else {
+                    slowDns.applyTo(initialConfig)
+                    saveServer(uiState)
+                }
+            }
         ) {
             CommonBasicFields(uiState)
             VlessProtocolFields(uiState, flowOptions)
@@ -41,6 +51,7 @@ class ServerVlessActivity : BaseServerActivity() {
                 scope = scope,
                 buildProfileItem = { uiState.toProfileItem(initialConfig) }
             )
+            SlowDnsFields(slowDns)
         }
     }
 
