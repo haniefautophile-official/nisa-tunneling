@@ -53,6 +53,7 @@ var (
 	fSNI       = flag.String("sni", "", "SNI untuk TLS")
 	fPayload   = flag.String("payload-file", "", "berkas payload HTTP")
 	fKnownHost = flag.String("known-hosts", "", "berkas sidik jari host SSH")
+	fHandshake = flag.Int("handshake", 30, "batas waktu jabat tangan + login SSH (detik)")
 )
 
 func main() {
@@ -73,10 +74,10 @@ func main() {
 		Auth:            []ssh.AuthMethod{ssh.Password(pass), keyboardInteractive(pass)},
 		HostKeyCallback: tofu(*fKnownHost, *fHost),
 		BannerCallback:  showBanner,
-		Timeout:         30 * time.Second,
+		Timeout:         time.Duration(*fHandshake) * time.Second,
 	}
 	// NewClientConn tidak memakai cfg.Timeout; tanpa batas ini helper menggantung bila server diam.
-	_ = conn.SetDeadline(time.Now().Add(30 * time.Second))
+	_ = conn.SetDeadline(time.Now().Add(time.Duration(*fHandshake) * time.Second))
 	cc, chans, reqs, err := ssh.NewClientConn(conn, *fHost, cfg)
 	if err != nil {
 		log.Fatalf("SSH gagal: %v", err)
