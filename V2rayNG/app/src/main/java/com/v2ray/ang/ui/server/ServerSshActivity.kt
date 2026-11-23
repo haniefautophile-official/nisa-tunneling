@@ -156,7 +156,7 @@ class ServerSshActivity : BaseServerActivity() {
                 FormDropdownField(
                     "Type",
                     slowDnsType,
-                    listOf("Otomatis", "TXT", "NULL", "CNAME", "NS", "MX", "SRV"),
+                    SLOWDNS_TYPE_OPTIONS,
                     { slowDnsType = it }
                 )
                 FormTextField(
