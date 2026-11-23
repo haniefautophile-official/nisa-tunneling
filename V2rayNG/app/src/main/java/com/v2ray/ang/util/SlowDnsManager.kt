@@ -17,10 +17,17 @@ object SlowDnsManager {
     // Jangan 10808: itu port SOCKS bawaan aplikasi (AppConfig.PORT_SOCKS).
     const val SLOW_DNS_LOCAL_PORT = 10899
 
+    // Tipe record yang dikenal klien dnstt (libdnstt.so). Di luar daftar ini jatuh ke TXT.
+    private val SUPPORTED_TYPES = setOf("txt", "null", "cname", "mx", "ns", "srv", "a", "aaaa", "caa")
+
     @Synchronized
     fun start(context: Context, domain: String, pubkey: String, doh: String, recordType: String = "") {
         TunnelLog.init(context)
-        val type = recordType.trim().lowercase().takeUnless { it.isEmpty() || it == "otomatis" } ?: "txt"
+        val requested = recordType.trim().lowercase().takeUnless { it.isEmpty() || it == "otomatis" } ?: "txt"
+        val type = if (requested in SUPPORTED_TYPES) requested else {
+            TunnelLog.add("SlowDNS: tipe record '$requested' tidak dikenal, memakai txt")
+            "txt"
+        }
         val key = "${domain.trim()}|${pubkey.trim()}|${doh.trim()}|$type"
         if (process?.isAlive == true) {
             // Parameter sama: pakai terus dnstt yang sudah jalan (perilaku lama, aman untuk SSH).
