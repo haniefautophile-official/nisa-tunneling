@@ -154,17 +154,17 @@ object SlowDnsManager {
             TunnelLog.add("SlowDNS: DNS sistem tidak ditemukan, memakai DoH 1.1.1.1")
             return fallback
         }
-        TunnelLog.add("SlowDNS: DNS sistem $chosen")
+        TunnelLog.detail("SlowDNS: DNS sistem $chosen")
         return listOf("-udp", "$chosen:53")
     }
 
     private fun withPort(hostPort: String, defaultPort: Int): String =
         if (Regex(".*:\\d+$").matches(hostPort)) hostPort else "$hostPort:$defaultPort"
 
-    /** Kosong = DoH Cloudflare lewat IP 1.1.1.1. "sistem" = DNS jaringan HP. https:// = DoH, tls:// atau dot:// = DoT, lainnya = UDP host[:port]. */
+    /** Kosong atau "sistem" = DNS resolver operator/jaringan HP lewat UDP 53 (jalan tanpa kuota). Fallback DoH 1.1.1.1 hanya jika DNS sistem tidak ditemukan. https:// = DoH, tls:// atau dot:// = DoT, lainnya = UDP host[:port]. */
     private fun resolverArgs(context: Context, raw: String): List<String> {
         val r = raw.trim()
-        if (r.isEmpty()) return listOf("-doh", "https://1.1.1.1/dns-query")
+        if (r.isEmpty()) return systemResolverArgs(context)
         return when {
             r.equals("sistem", ignoreCase = true) || r.equals("system", ignoreCase = true) -> systemResolverArgs(context)
             r.startsWith("https://", ignoreCase = true) -> listOf("-doh", dohUrlWithIp(r))
