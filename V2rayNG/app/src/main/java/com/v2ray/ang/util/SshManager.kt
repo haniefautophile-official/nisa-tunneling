@@ -163,6 +163,8 @@ object SshManager {
         try {
             if (profile.slowDnsEnabled) {
                 cmd += listOf("-connect", "127.0.0.1:${SlowDnsManager.SLOW_DNS_LOCAL_PORT}")
+                // Jabat tangan SSH lewat DNS lambat (MTU kecil): beri waktu lebih panjang dari 30 detik
+                cmd += listOf("-handshake", "120")
             } else if (!profile.sshProxy.isNullOrBlank()) {
                 // Format [user:pass@]host:port. Semua IP host proxy dicoba berurutan oleh helper.
                 val raw = profile.sshProxy.orEmpty().trim()
