@@ -1,3 +1,11 @@
+Pembaruan 2.4.21:
+- SlowDNS kini tersedia di semua jenis akun: SSH, Trojan, VMess, dan VLESS, dengan form yang sama (centang SlowDNS, Type, NS Domain, Public Key, DNS).
+- Pilihan Type record diperluas: Otomatis (TXT), TXT, NULL, CNAME, MX, NS, SRV, A, AAAA, dan CAA. Jika satu tipe diblokir operator, coba tipe lain.
+- Type record kini ikut tersimpan saat akun dibagikan lewat link dan QR.
+- Jika NS Domain atau Public Key kosong saat SlowDNS aktif, muncul peringatan dan profil tidak disimpan.
+
+Cara update: menu (tiga garis) > Check for update > unduh, lalu pasang di atas aplikasi lama. Akun tetap aman.
+
 Pembaruan 2.4.20:
 - SlowDNS: waktu tunggu login SSH diperpanjang menjadi 120 detik, karena jabat tangan SSH lewat DNS lambat dan sebelumnya bisa terputus di tengah jalan. Setelah menekan sambung, tunggu sampai muncul "Tersambung".
 
