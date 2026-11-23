@@ -16,6 +16,7 @@ object NisaExtra {
 
     private data class Data(
         var sd: Boolean? = null, var sdd: String? = null, var sdk: String? = null, var sdh: String? = null,
+        var sdt: String? = null,
         var pl: String? = null, var tls: Boolean? = null, var sni: String? = null, var px: String? = null,
     )
 
@@ -24,6 +25,7 @@ object NisaExtra {
         val d = Data(
             sd = if (c.slowDnsEnabled) true else null,
             sdd = c.slowDnsDomain.nullIfBlank(), sdk = c.slowDnsPubkey.nullIfBlank(), sdh = c.slowDnsDoh.nullIfBlank(),
+            sdt = c.slowDnsType.nullIfBlank()?.takeUnless { it.equals("Otomatis", ignoreCase = true) },
             pl = c.sshPayload.nullIfBlank(), tls = if (c.sshTls) true else null,
             sni = c.sshSni.nullIfBlank(), px = c.sshProxy.nullIfBlank(),
         )
@@ -36,7 +38,7 @@ object NisaExtra {
             val json = Base64.decode(token, B64).toString(Charsets.UTF_8)
             val d = JsonUtil.fromJson(json, Data::class.java) ?: return
             c.slowDnsEnabled = d.sd == true
-            c.slowDnsDomain = d.sdd; c.slowDnsPubkey = d.sdk; c.slowDnsDoh = d.sdh
+            c.slowDnsDomain = d.sdd; c.slowDnsPubkey = d.sdk; c.slowDnsDoh = d.sdh; c.slowDnsType = d.sdt
             c.sshPayload = d.pl; c.sshTls = d.tls == true; c.sshSni = d.sni; c.sshProxy = d.px
         } catch (_: Exception) {
         }
