@@ -170,7 +170,7 @@ class ServerSshActivity : BaseServerActivity() {
                     onValueChange = { slowDnsPubkey = it }
                 )
                 FormTextField(
-                    label = "DNS (host:port UDP, https:// untuk DoH, atau ketik: sistem)",
+                    label = "DNS (kosong = DNS operator; host:port UDP; https:// untuk DoH)",
                     value = slowDnsDoh,
                     onValueChange = { slowDnsDoh = it }
                 )
