@@ -1,3 +1,10 @@
+Pembaruan 2.4.23:
+- Tab LOG kini menampilkan alasan asli saat forward SSH gagal (baris "SSH: forward ... gagal: ..."), sebelumnya baris ini tersaring dan tidak pernah terlihat. Dari sini penyebab internet tidak lewat tunnel bisa langsung diketahui.
+- SlowDNS: tes ping kini memakai HTTP biasa (balasan 301/302 dihitung berhasil), batas baca 40 detik, dan 6 percobaan dengan jeda 6 detik, karena tiap permintaan lewat DNS butuh beberapa detik.
+- Tulisan "Ping gagal" hanya catatan di log dan tidak memutus koneksi. Setelah menekan sambung lewat SlowDNS, tunggu sekitar satu menit lalu coba buka situs di browser.
+
+Cara update: menu (tiga garis) > Check for update > unduh, lalu pasang di atas aplikasi lama. Akun tetap aman.
+
 Pembaruan 2.4.22:
 - Tab LOG kini selalu menampilkan tipe record dan alamat DNS yang dipakai SlowDNS (tanpa perlu menyalakan Log detail), supaya mudah mencocokkan dengan server.
 - Peringatan dari klien SlowDNS (misalnya tipe record dipaksa kembali ke TXT) kini ikut tampil di tab LOG.
