@@ -1,3 +1,10 @@
+Pembaruan 2.4.22:
+- Tab LOG kini selalu menampilkan tipe record dan alamat DNS yang dipakai SlowDNS (tanpa perlu menyalakan Log detail), supaya mudah mencocokkan dengan server.
+- Peringatan dari klien SlowDNS (misalnya tipe record dipaksa kembali ke TXT) kini ikut tampil di tab LOG.
+- Jika SlowDNS tidak tersambung (noise handshake: timeout), pastikan Type di profil sama dengan tipe record di server.
+
+Cara update: menu (tiga garis) > Check for update > unduh, lalu pasang di atas aplikasi lama. Akun tetap aman.
+
 Pembaruan 2.4.21:
 - SlowDNS kini tersedia di semua jenis akun: SSH, Trojan, VMess, dan VLESS, dengan form yang sama (centang SlowDNS, Type, NS Domain, Public Key, DNS).
 - Pilihan Type record diperluas: Otomatis (TXT), TXT, NULL, CNAME, MX, NS, SRV, A, AAAA, dan CAA. Jika satu tipe diblokir operator, coba tipe lain.
