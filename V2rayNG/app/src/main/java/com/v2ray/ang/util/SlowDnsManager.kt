@@ -193,6 +193,9 @@ object SlowDnsManager {
         }
     }
 
+    /** True bila klien dnstt sedang jalan (dipakai AutoPing untuk memberi batas waktu lebih longgar). */
+    fun isActive(): Boolean = process?.isAlive == true
+
     @Synchronized
     fun stop() {
         stopLocked()
