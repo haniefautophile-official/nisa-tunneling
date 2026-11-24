@@ -69,16 +69,19 @@ object AutoPing {
         val g = ++verifyGen
         thread(isDaemon = true, name = "nisa-verify") {
             if (!pause(1500)) return@thread
-            repeat(4) { i ->
+            // Tunnel SlowDNS lambat (tiap permintaan butuh beberapa detik): beri percobaan dan jeda lebih longgar
+            val tries = if (SlowDnsManager.isActive()) 6 else 4
+            val gap = if (SlowDnsManager.isActive()) 6000L else 3000L
+            repeat(tries) { i ->
                 if (g != verifyGen) return@thread
                 if (ping(currentUrl())) {
                     TunnelLog.add("Tersambung")
                     return@thread
                 }
-                if (i < 3 && !pause(3000)) return@thread
+                if (i < tries - 1 && !pause(gap)) return@thread
             }
             if (g == verifyGen) {
-                TunnelLog.add("Terhubung ke server, tapi internet tidak lewat tunnel (tes gagal 4 kali)")
+                TunnelLog.add("Terhubung ke server, tapi internet tidak lewat tunnel (tes gagal $tries kali)")
             }
         }
     }
@@ -158,8 +161,13 @@ object AutoPing {
     }
 
     /** GET lewat SOCKS5 lokal Xray (mendukung tanpa auth dan user/pass). */
-    private fun ping(urlStr: String): Boolean {
+    private fun ping(rawUrl: String): Boolean {
         var socks: Socket? = null
+        // Lewat SlowDNS: TLS butuh banyak bolak-balik (tiap kali beberapa detik), jadi ping memakai HTTP biasa
+        // dan batas baca diperpanjang. Balasan 301/302 dari http://dns.google tetap dihitung berhasil.
+        val slow = SlowDnsManager.isActive()
+        val urlStr = if (slow && rawUrl.startsWith("https://", ignoreCase = true)) "http://" + rawUrl.substring(8) else rawUrl
+        val readTimeout = if (slow) 40_000 else 10_000
         return try {
             val u = URL(urlStr)
             val host = u.host
@@ -171,7 +179,7 @@ object AutoPing {
             val s = Socket()
             socks = s
             s.connect(InetSocketAddress("127.0.0.1", SettingsManager.getSocksPort()), 5000)
-            s.soTimeout = 10000
+            s.soTimeout = readTimeout
             val input = s.getInputStream()
             val output = s.getOutputStream()
 
@@ -215,7 +223,7 @@ object AutoPing {
             if (https) {
                 val ssl = (SSLSocketFactory.getDefault() as SSLSocketFactory)
                     .createSocket(s, host, port, true) as SSLSocket
-                ssl.soTimeout = 10000
+                ssl.soTimeout = readTimeout
                 ssl.startHandshake()
                 conn = ssl
             }
