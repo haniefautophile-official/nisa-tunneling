@@ -109,7 +109,10 @@ object SshManager {
                                 TunnelLog.add("SSH login berhasil, menguji internet...")
                                 AutoPing.verify()
                                 TunnelLog.detail("SSH: " + line.removePrefix("[sshsocks] "))
-                            } else if (!line.contains("forward ") && !rawLine.startsWith("banner: ")) {
+                            } else if (line.contains("forward ")) {
+                                // Kegagalan forward (helper membatasi 10 baris) = alasan asli internet tidak lewat
+                                TunnelLog.add("SSH: " + line.removePrefix("[sshsocks] "))
+                            } else if (!rawLine.startsWith("banner: ")) {
                                 TunnelLog.essential("SSH: " + line.removePrefix("[sshsocks] "))
                             }
                         }
