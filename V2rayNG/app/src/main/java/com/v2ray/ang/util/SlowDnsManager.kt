@@ -64,7 +64,7 @@ object SlowDnsManager {
             "-domain", domain.trim(),
             "-listen", "127.0.0.1:$SLOW_DNS_LOCAL_PORT"
         )
-        TunnelLog.detail("SlowDNS: tipe record $type, resolver ${resolver.joinToString(" ")}")
+        TunnelLog.add("SlowDNS: tipe record $type, DNS ${resolver.joinToString(" ")} (isian profil: ${doh.trim().ifEmpty { "kosong" }})")
 
         try {
             TunnelLog.detail("SlowDNS: memulai ${domain.trim()}")
@@ -79,7 +79,12 @@ object SlowDnsManager {
             // Sekaligus menampilkan error/usage dnstt di logcat (tag SlowDnsManager).
             thread(isDaemon = true, name = "dnstt-log") {
                 try {
-                    p.inputStream.bufferedReader().forEachLine { Log.i(TAG, it); TunnelLog.essential("SlowDNS: $it") }
+                    p.inputStream.bufferedReader().forEachLine {
+                        Log.i(TAG, it)
+                        // Peringatan/error klien (mis. tipe record dipaksa ke TXT) selalu ditampilkan.
+                        if (it.contains("level=warn") || it.contains("level=error")) TunnelLog.add("SlowDNS: $it")
+                        else TunnelLog.essential("SlowDNS: $it")
+                    }
                 } catch (_: Exception) {
                 }
                 Log.w(TAG, "dnstt berhenti")
