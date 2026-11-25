@@ -1,4 +1,14 @@
-# 2.4.26
+# 2.4.27
+
+- Perbaikan SlowDNS: port lokal klien dnstt dipindah dari 10808 ke 10899. Sebelumnya
+  bentrok dengan port SOCKS Xray (10808), sehingga core gagal start dengan error
+  "address already in use".
+- Perbaikan SlowDNS: DoH bawaan sekarang `https://1.1.1.1/dns-query` (bukan
+  `cloudflare-dns.com`). Klien Go di Android tidak punya resolver sistem, jadi lookup
+  nama DoH gagal ke `[::1]:53`. Kalau di profil field DoH berisi URL berhostname, ganti ke
+  URL berbasis IP.
+
+# 2.4.26 (sebelumnya)
 
 - SlowDNS: klien dnstt (libdnstt.so) sekarang dijalankan dalam mode wire native VayDNS
   (`-clientid-size 2`, sama dengan bawaan vaydns-server), bukan `-dnstt-compat`. Overhead per query turun dari 13 byte
