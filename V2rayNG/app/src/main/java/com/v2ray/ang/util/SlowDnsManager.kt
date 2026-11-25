@@ -27,16 +27,28 @@ object SlowDnsManager {
     // Hapus bila server/klien tidak lagi dipakai lewat resolver yang membuang query panjang.
     private const val HANDSHAKE_FAILS_BEFORE_STEP = 2
 
+    // Sejak 2.4.25: klien dipakai dalam mode wire native VayDNS (bukan -dnstt-compat), karena
+    // overhead per-query jauh lebih kecil (ClientID 1 byte + 1 byte panjang, vs 8+1+3+1 byte
+    // di mode compat). Server (dnstt-server-multi / vaydns-server) WAJIB dijalankan dengan
+    // -clientid-size 1 dan TANPA -dnstt-compat, atau jabat tangan gagal total (bukan lambat).
+    // Set true cuma kalau perlu balik ke server dnstt-compat lama.
+    private const val USE_DNSTT_COMPAT = false
+    private const val NATIVE_CLIENT_ID_SIZE = 1
+
     private const val QNAME_MAX = 253
     private val QNAME_STEPS = intArrayOf(130, 100)
 
     /**
-     * Urutan batas -max-qname-len dari yang terbesar: 0 = bawaan klien (253), lalu 130, 100, dan
-     * batas terkecil yang masih diizinkan. MTU minimum klien 25 byte; dengan ClientID 8 byte dan
-     * overhead dnstt, nama query minimal sepanjang domain + 62 karakter. Ditambah 2 sebagai cadangan.
+     * Urutan batas -max-qname-len dari yang terbesar: 0 = bawaan klien, lalu 130, 100, dan batas
+     * terkecil yang masih diizinkan. Lantai (floor) beda per mode wire format karena overhead
+     * per-query beda jauh:
+     *  - compat: ClientID 8 byte + padding (overhead 13 byte) -> lantai domain + 61, dibulatkan 64.
+     *  - native: ClientID 1 byte (overhead 2 byte) -> lantai domain + 43, dibulatkan 45.
+     * Keduanya masih dibatasi lantai KCP sendiri (~24 byte minimum per paket), jadi ini bukan
+     * batas bebas-pilih, cuma titik terendah yang masih bisa dipakai klien.
      */
-    internal fun qnameSteps(domain: String): List<Int> {
-        val floor = domain.trim().length + 64
+    internal fun qnameSteps(domain: String, compat: Boolean = USE_DNSTT_COMPAT): List<Int> {
+        val floor = domain.trim().length + if (compat) 64 else 45
         if (floor > QNAME_MAX) return listOf(0)
         return (listOf(0) + QNAME_STEPS.toList() + floor)
             .filter { it == 0 || (it >= floor && it < QNAME_MAX) }
@@ -128,8 +140,16 @@ object SlowDnsManager {
     /** Menjalankan klien dnstt. [qname] 0 = batas nama query bawaan klien. Dipanggil dengan lock dipegang. */
     private fun launchLocked(args: LaunchArgs, qname: Int) {
         val binaryPath = File(args.context.applicationInfo.nativeLibraryDir, "libdnstt.so").absolutePath
-        // Klien VayDNS (libdnstt.so) dalam mode kompatibel dnstt, supaya cocok dengan server dnstt.
-        val command = mutableListOf(binaryPath, "-dnstt-compat", "-record-type", args.type)
+        // Klien VayDNS (libdnstt.so). Mode native (bukan -dnstt-compat) dipakai sejak 2.4.25 karena
+        // overhead per-query jauh lebih kecil; server WAJIB dipasangkan dengan -clientid-size 1 dan
+        // TANPA -dnstt-compat, kalau tidak jabat tangan gagal total.
+        val command = mutableListOf(binaryPath)
+        if (USE_DNSTT_COMPAT) {
+            command += listOf("-dnstt-compat")
+        } else {
+            command += listOf("-clientid-size", NATIVE_CLIENT_ID_SIZE.toString())
+        }
+        command += listOf("-record-type", args.type)
         command += args.resolver
         if (qname > 0) command += listOf("-max-qname-len", qname.toString())
         command += listOf(
