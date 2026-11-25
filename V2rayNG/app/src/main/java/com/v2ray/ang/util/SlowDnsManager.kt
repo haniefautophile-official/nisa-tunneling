@@ -28,6 +28,13 @@ object SlowDnsManager {
     // -> menambah beban saat kondisi sudah rawan. "block": pengirim ditahan/mundur dulu, lebih
     // stabil di jalur yang gampang macet meski throughput lebih rendah.
     private const val QUEUE_OVERFLOW_MODE = "block"
+    // Log menunjukkan sesi selalu mati persis ~15 detik setelah ready, bahkan saat hampir tidak
+    // ada trafik (ping ICMP ke dns.google tidak lewat tunnel sama sekali, jadi tidak dihitung
+    // sebagai "data"). Pola waktu tetap ini cocok dengan NAT/conntrack mapping UDP yang ditutup
+    // operator (XL) setelah idle sekian detik, bukan soal volume/burst query. Keepalive dikirim
+    // jauh lebih sering dari ambang itu supaya mapping tidak pernah sempat idle.
+    private const val KEEPALIVE_INTERVAL = "5s"
+    private const val IDLE_TIMEOUT = "30s"
 
     internal fun qnameSteps(domain: String, compat: Boolean = USE_DNSTT_COMPAT): List<Int> {
         val floor = domain.trim().length + if (compat) 64 else 45
@@ -127,6 +134,8 @@ object SlowDnsManager {
         command += listOf("-record-type", args.type)
         command += listOf("-kcp-window-size", KCP_WINDOW_SIZE.toString())
         command += listOf("-queue-overflow", QUEUE_OVERFLOW_MODE)
+        command += listOf("-keepalive", KEEPALIVE_INTERVAL)
+        command += listOf("-idle-timeout", IDLE_TIMEOUT)
         command += args.resolver
         if (qname > 0) command += listOf("-max-qname-len", qname.toString())
         command += listOf(
