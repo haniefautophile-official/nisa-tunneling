@@ -1,3 +1,4 @@
+// nisa-tunneling-master/V2rayNG/app/src/main/java/com/v2ray/ang/util/SlowDnsManager.kt
 package com.v2ray.ang.util
 
 import android.content.Context
@@ -8,39 +9,17 @@ import java.net.InetAddress
 import kotlin.concurrent.thread
 
 object SlowDnsManager {
-    private const val TAG = "NisaLog" // tag ini yang ditampilkan menu Logcat aplikasi
+    private const val TAG = "NisaLog"
     private var process: Process? = null
-
-    // Parameter proses dnstt yang sedang jalan. Dipakai untuk mendeteksi pergantian profil.
     private var currentKey: String? = null
-
-    // Jangan 10808: itu port SOCKS bawaan aplikasi (AppConfig.PORT_SOCKS).
     const val SLOW_DNS_LOCAL_PORT = 10899
-
-    // Tipe record yang dikenal klien dnstt (libdnstt.so). Di luar daftar ini jatuh ke TXT.
     private val SUPPORTED_TYPES = setOf("txt", "null", "cname", "mx", "ns", "srv", "a", "aaaa", "caa")
-
-    // NISA_QNAME_V3: satu timeout langsung memicu turun batas.
     private const val HANDSHAKE_FAILS_BEFORE_STEP = 1
-
     private const val USE_DNSTT_COMPAT = true
     private const val NATIVE_CLIENT_ID_SIZE = 1
-
     private const val QNAME_MAX = 253
-    // NISA_QNAME_V3: langkah jauh di bawah versi lama. XL membuang query data di sekitar 49
-    // karakter, jadi 130 dan 100 selalu ditolak. Langkah baru mulai dari 80 turun ke 40 supaya
-    // domain pendek masih punya ruang handshake setelah base32 + ClientID.
     private val QNAME_STEPS = intArrayOf(80, 70, 60, 55, 50, 45, 40)
 
-    /**
-     * Urutan batas -max-qname-len dari yang terbesar: 0 = bawaan klien, lalu 80, 70, 60, 55,
-     * 50, 45, 40, dan batas terkecil yang masih diizinkan. Lantai (floor) beda per mode wire format:
-     *  - compat: ClientID 8 byte + padding (overhead 13 byte) -> lantai domain + 61, dibulatkan 64.
-     *  - native: ClientID 1 byte (overhead 2 byte) -> lantai domain + 43, dibulatkan 45.
-     * NISA_QNAME_V3: lantai dihitung dari panjang domain nyata, jadi domain panjang seperti
-     * xray.nisavpn.biz.id (21 karakter) menghasilkan lantai 66 dan langkah 45/40 otomatis dibuang.
-     * Kalau semua langkah di bawah lantai, hanya 0 yang tersisa dan turun QNAME tidak akan menolong.
-     */
     internal fun qnameSteps(domain: String, compat: Boolean = USE_DNSTT_COMPAT): List<Int> {
         val floor = domain.trim().length + if (compat) 64 else 45
         if (floor > QNAME_MAX) return listOf(0)
@@ -49,15 +28,12 @@ object SlowDnsManager {
             .distinct()
     }
 
-    /** Batas berikutnya yang lebih kecil dari [current] dan lebih besar dari [rejected], atau null. */
     internal fun nextQname(steps: List<Int>, current: Int, rejected: Int): Int? =
         steps.firstOrNull { it != 0 && (current == 0 || it < current) && it > rejected }
 
     private fun isHandshakeTimeout(line: String): Boolean =
         line.contains("noise handshake", ignoreCase = true) && line.contains("timeout", ignoreCase = true)
 
-    // NISA_QNAME_V3: klien kadang keluar dengan "effective MTU" < 48 atau "MTU too small" atau
-    // "mtu rejected". Semua bentuk itu harus dianggap penolakan supaya batas QNAME tidak diulang.
     private fun isMtuTooSmall(line: String): Boolean {
         val lower = line.lowercase()
         if (lower.contains("mtu") && (lower.contains("too small") || lower.contains("reject") || lower.contains("below"))) return true
@@ -76,14 +52,10 @@ object SlowDnsManager {
         val pubkeyPath: String
     )
 
-    // Disimpan supaya klien bisa dijalankan ulang dengan batas nama query lain.
     private var launchArgs: LaunchArgs? = null
     private var currentQname = 0
     private var rejectedQname = 0
     private var handshakeFails = 0
-
-    // Batas yang terakhir dipakai per jaringan (domain + alamat DNS), supaya sambung ulang di
-    // jaringan yang sama langsung memakai batas yang sudah terbukti perlu. Hanya di memori.
     private val learnedQname = HashMap<String, Int>()
 
     @Synchronized
@@ -135,7 +107,6 @@ object SlowDnsManager {
         launchLocked(args, learnedQname[args.netKey] ?: 0)
     }
 
-    /** Menjalankan klien dnstt. [qname] 0 = batas nama query bawaan klien. Dipanggil dengan lock dipegang. */
     private fun launchLocked(args: LaunchArgs, qname: Int) {
         val binaryPath = File(args.context.applicationInfo.nativeLibraryDir, "libdnstt.so").absolutePath
         val command = mutableListOf(binaryPath)
@@ -163,10 +134,6 @@ object SlowDnsManager {
             val p = pb.start()
             process = p
             currentKey = args.key
-            // NISA_QNAME_V3: pembaca pipa hanya mencatat flag. Tidak memanggil stopLocked() dari
-            // thread ini, karena itu menutup inputStream yang sedang dibaca dan memunculkan
-            // "read/write on closed pipe". Evaluasi dilakukan di thread terpisah setelah proses
-            // benar-benar berhenti.
             thread(isDaemon = true, name = "dnstt-log") {
                 var mtuRejected = false
                 var handshakeTimedOut = false
@@ -197,10 +164,6 @@ object SlowDnsManager {
         }
     }
 
-    /**
-     * NISA_QNAME_V3: jabat tangan timeout. Proses lama dimatikan dulu (destroy + tunggu keluar)
-     * tanpa memanggil stopLocked() dari pembaca pipa, lalu launch ulang dengan batas lebih kecil.
-     */
     @Synchronized
     private fun onHandshakeTimeout(p: Process) {
         if (process !== p) return
@@ -216,8 +179,6 @@ object SlowDnsManager {
         }
         TunnelLog.add("SlowDNS: jabat tangan timeout $handshakeFails kali, mencoba batas nama query $next")
         learnedQname[args.netKey] = next
-        // Matikan proses lama tanpa stopLocked(): stopLocked() menutup process field, tapi proses
-        // ini sudah berhenti sendiri (pipa habis), jadi cukup destroy untuk memastikan.
         try { p.destroy() } catch (_: Exception) { }
         var waited = 0
         while (waited < 1500) {
@@ -233,7 +194,6 @@ object SlowDnsManager {
         launchLocked(args, next)
     }
 
-    /** Klien menolak batas ini (MTU di bawah minimum): kembali ke batas sebelumnya dan jangan turun lagi. */
     @Synchronized
     private fun onQnameRejected(p: Process) {
         if (process !== p) return
@@ -259,7 +219,6 @@ object SlowDnsManager {
         launchLocked(args, back)
     }
 
-    /** Binary Go di Android tidak punya DNS sendiri, jadi nama host di-resolve di sini. */
     private fun resolveHost(host: String): String {
         if (host.contains(":") || host.matches(Regex("\\d{1,3}(\\.\\d{1,3}){3}"))) return host
         var result: String? = null
