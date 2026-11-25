@@ -51,4 +51,11 @@ class SlowDnsQnameStepsTest {
         // Klien menolak 65 (MTU di bawah minimum): dari 70 tidak ada langkah lagi.
         assertNull(SlowDnsManager.nextQname(steps, 70, 65))
     }
+
+    @Test
+    fun defaultBuildMatchesProductionServer() {
+        // Server produksi (dnstt-server-null) bicara format dnstt klasik, jadi build default harus compat.
+        assertEquals(true, SlowDnsManager.USE_DNSTT_COMPAT)
+        assertEquals(10899, SlowDnsManager.SLOW_DNS_LOCAL_PORT)
+    }
 }
