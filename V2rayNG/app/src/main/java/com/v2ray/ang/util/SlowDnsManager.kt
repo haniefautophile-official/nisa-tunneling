@@ -23,7 +23,7 @@ object SlowDnsManager {
     // NISA_QNAME_V3: satu timeout langsung memicu turun batas.
     private const val HANDSHAKE_FAILS_BEFORE_STEP = 1
 
-    private const val USE_DNSTT_COMPAT = false
+    private const val USE_DNSTT_COMPAT = true
     private const val NATIVE_CLIENT_ID_SIZE = 1
 
     private const val QNAME_MAX = 253
