@@ -20,12 +20,9 @@ object SlowDnsManager {
     // Tipe record yang dikenal klien dnstt (libdnstt.so). Di luar daftar ini jatuh ke TXT.
     private val SUPPORTED_TYPES = setOf("txt", "null", "cname", "mx", "ns", "srv", "a", "aaaa", "caa")
 
-    // Pada operator tertentu (terlihat di XL) resolver hanya meneruskan query polling yang pendek
-    // (nama 47 karakter) dan membuang query berisi data yang namanya panjang, sehingga jabat tangan
-    // Noise selalu timeout. Klien mode dnstt-compat memakai nama sampai 253 karakter, jadi bila
-    // jabat tangan timeout berulang, batas panjang nama (-max-qname-len) diturunkan bertahap.
-    // Hapus bila server/klien tidak lagi dipakai lewat resolver yang membuang query panjang.
-    private const val HANDSHAKE_FAILS_BEFORE_STEP = 2
+    // NISA_QNAME_V2: satu timeout langsung memicu turun batas. Di XL, resolver membuang query
+    // panjang tanpa memberi jawaban, jadi menunggu dua kali timeout hanya memperlambat.
+    private const val HANDSHAKE_FAILS_BEFORE_STEP = 1
 
     // Sejak 2.4.25: klien dipakai dalam mode wire native VayDNS (bukan -dnstt-compat), karena
     // overhead per-query jauh lebih kecil (ClientID 1 byte + 1 byte panjang, vs 8+1+3+1 byte
@@ -36,16 +33,16 @@ object SlowDnsManager {
     private const val NATIVE_CLIENT_ID_SIZE = 1
 
     private const val QNAME_MAX = 253
-    private val QNAME_STEPS = intArrayOf(130, 100)
+    // NISA_QNAME_V2: langkah dibuat jauh lebih rendah dari sebelumnya. XL membuang query data
+    // di sekitar 49 karakter, jadi 130 dan 100 selalu ditolak. Langkah baru mulai dari 80 turun
+    // ke 45 supaya masih ada ruang untuk handshake Noise setelah base32 + ClientID.
+    private val QNAME_STEPS = intArrayOf(80, 70, 60, 55, 50, 45)
 
     /**
-     * Urutan batas -max-qname-len dari yang terbesar: 0 = bawaan klien, lalu 130, 100, dan batas
-     * terkecil yang masih diizinkan. Lantai (floor) beda per mode wire format karena overhead
-     * per-query beda jauh:
+     * Urutan batas -max-qname-len dari yang terbesar: 0 = bawaan klien, lalu 80, 70, 60, 55,
+     * 50, 45, dan batas terkecil yang masih diizinkan. Lantai (floor) beda per mode wire format:
      *  - compat: ClientID 8 byte + padding (overhead 13 byte) -> lantai domain + 61, dibulatkan 64.
      *  - native: ClientID 1 byte (overhead 2 byte) -> lantai domain + 43, dibulatkan 45.
-     * Keduanya masih dibatasi lantai KCP sendiri (~24 byte minimum per paket), jadi ini bukan
-     * batas bebas-pilih, cuma titik terendah yang masih bisa dipakai klien.
      */
     internal fun qnameSteps(domain: String, compat: Boolean = USE_DNSTT_COMPAT): List<Int> {
         val floor = domain.trim().length + if (compat) 64 else 45
@@ -62,8 +59,15 @@ object SlowDnsManager {
     private fun isHandshakeTimeout(line: String): Boolean =
         line.contains("noise handshake", ignoreCase = true) && line.contains("timeout", ignoreCase = true)
 
-    private fun isMtuTooSmall(line: String): Boolean =
-        line.contains("MTU", ignoreCase = false) && line.contains("too small", ignoreCase = true)
+    // NISA_QNAME_V2: klien kadang keluar dengan "effective MTU" < 48 atau "MTU too small" atau
+    // "mtu rejected". Semua bentuk itu harus dianggap penolakan supaya batas QNAME tidak diulang.
+    private fun isMtuTooSmall(line: String): Boolean {
+        val lower = line.lowercase()
+        if (lower.contains("mtu") && (lower.contains("too small") || lower.contains("reject") || lower.contains("below"))) return true
+        val m = Regex("effective\\s+mtu\\s*[=:]?\\s*(\\d+)", RegexOption.IGNORE_CASE).find(line) ?: return false
+        val mtu = m.groupValues[1].toIntOrNull() ?: return false
+        return mtu < 48
+    }
 
     private class LaunchArgs(
         val context: Context,
@@ -174,6 +178,7 @@ object SlowDnsManager {
             // Sekaligus menampilkan error/usage dnstt di logcat (tag SlowDnsManager).
             thread(isDaemon = true, name = "dnstt-log") {
                 var mtuRejected = false
+                var handshakeTimedOut = false
                 try {
                     p.inputStream.bufferedReader().forEachLine {
                         Log.i(TAG, it)
@@ -183,14 +188,24 @@ object SlowDnsManager {
                         if (isMtuTooSmall(it)) {
                             mtuRejected = true
                         } else if (isHandshakeTimeout(it)) {
-                            onHandshakeTimeout(p)
+                            // NISA_QNAME_V2: jangan panggil onHandshakeTimeout() dari thread ini.
+                            // stopLocked() di dalamnya akan menutup inputStream yang sedang dibaca
+                            // dan membuat process !== p saat fungsi jalan, sehingga turun QNAME
+                            // tidak pernah terjadi. Cukup catat flag, proses setelah proses mati.
+                            handshakeTimedOut = true
                         }
                     }
                 } catch (_: Exception) {
                 }
                 Log.w(TAG, "dnstt berhenti")
                 TunnelLog.detail("SlowDNS: berhenti")
-                if (mtuRejected) onQnameRejected(p)
+                // NISA_QNAME_V2: evaluasi setelah proses benar-benar berhenti, di thread terpisah
+                // supaya lock start()/stop() tidak deadlock dengan pembaca pipa.
+                if (mtuRejected) {
+                    thread(isDaemon = true, name = "dnstt-qname-reject") { onQnameRejected(p) }
+                } else if (handshakeTimedOut) {
+                    thread(isDaemon = true, name = "dnstt-qname-step") { onHandshakeTimeout(p) }
+                }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Gagal menjalankan dnstt", e)
@@ -198,7 +213,7 @@ object SlowDnsManager {
         }
     }
 
-    /** Jabat tangan timeout lagi: setelah beberapa kali, jalankan ulang dengan batas nama query lebih kecil. */
+    /** Jabat tangan timeout: setelah beberapa kali, jalankan ulang dengan batas nama query lebih kecil. */
     @Synchronized
     private fun onHandshakeTimeout(p: Process) {
         if (process !== p) return // proses ini sudah diganti atau dihentikan
