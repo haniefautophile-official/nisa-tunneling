@@ -20,8 +20,12 @@ object SlowDnsManager {
     /** Port lokal tempat klien dnstt mendengarkan. */
     const val SLOW_DNS_LOCAL_PORT = 10899
 
-    /** false = format native VayDNS (server: tanpa -dnstt-compat, -clientid-size 2). */
-    const val USE_DNSTT_COMPAT = false
+    /**
+     * true = format dnstt klasik (-dnstt-compat), cocok dengan server dnstt-server di produksi
+     * (dnstt-server-null di port 5300). false = format native VayDNS (server: tanpa
+     * -dnstt-compat, -clientid-size 2); jangan diaktifkan sebelum server diganti.
+     */
+    const val USE_DNSTT_COMPAT = true
 
     /** Harus sama dengan -clientid-size di server. */
     const val NATIVE_CLIENT_ID_SIZE = 2
