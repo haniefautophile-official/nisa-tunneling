@@ -115,7 +115,7 @@ object SlowDnsManager {
         } else {
             command += listOf("-clientid-size", NATIVE_CLIENT_ID_SIZE.toString())
         }
-        command += listOf("-record-type", args.type, "-rps", "5")
+        command += listOf("-record-type", args.type)
         command += args.resolver
         if (qname > 0) command += listOf("-max-qname-len", qname.toString())
         command += listOf(
@@ -290,7 +290,8 @@ object SlowDnsManager {
 
     private fun resolverArgs(context: Context, raw: String): List<String> {
         val r = raw.trim()
-        if (r.isEmpty()) return systemResolverArgs(context)
+        // NISA_DOH_DEFAULT: kosong = DoH Cloudflare. Resolver operator (XL) memalsukan NXDOMAIN untuk query data, DoH melewatinya.
+        if (r.isEmpty()) return listOf("-doh", "https://1.1.1.1/dns-query")
         return when {
             r.equals("sistem", ignoreCase = true) || r.equals("system", ignoreCase = true) -> systemResolverArgs(context)
             r.startsWith("https://", ignoreCase = true) -> listOf("-doh", dohUrlWithIp(r))
