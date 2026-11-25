@@ -18,7 +18,7 @@ import kotlin.concurrent.thread
  */
 object SlowDnsManager {
     /** Port lokal tempat klien dnstt mendengarkan. */
-    const val SLOW_DNS_LOCAL_PORT = 10808
+    const val SLOW_DNS_LOCAL_PORT = 10899
 
     /** false = format native VayDNS (server: tanpa -dnstt-compat, -clientid-size 2). */
     const val USE_DNSTT_COMPAT = false
@@ -26,7 +26,7 @@ object SlowDnsManager {
     /** Harus sama dengan -clientid-size di server. */
     const val NATIVE_CLIENT_ID_SIZE = 2
 
-    private const val DEFAULT_DOH = "https://cloudflare-dns.com/dns-query"
+    private const val DEFAULT_DOH = "https://1.1.1.1/dns-query"
     private const val MAX_QNAME = 253
     private const val NATIVE_OVERHEAD = 45
     private const val COMPAT_OVERHEAD = 64
