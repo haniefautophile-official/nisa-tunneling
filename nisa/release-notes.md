@@ -1,3 +1,14 @@
+# 2.4.28
+
+- SlowDNS: klien kembali ke format dnstt klasik (`-dnstt-compat`) supaya cocok dengan
+  server produksi (dnstt-server di port 5300). Build 2.4.26 dan 2.4.27 memakai format
+  native (`-clientid-size 2`) yang tidak dikenali server itu, sehingga jabat tangan gagal.
+  Pengguna 2.4.27 cukup update ke versi ini.
+- Port lokal klien tetap 10899 dan DoH bawaan tetap `https://1.1.1.1/dns-query`
+  (perbaikan dari 2.4.27).
+- Mode native tetap tersedia di kode (`USE_DNSTT_COMPAT = false`) untuk nanti, setelah
+  server diganti ke `-clientid-size 2`.
+
 # 2.4.27
 
 - Perbaikan SlowDNS: port lokal klien dnstt dipindah dari 10808 ke 10899. Sebelumnya
