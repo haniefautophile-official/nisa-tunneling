@@ -115,7 +115,7 @@ object SlowDnsManager {
         } else {
             command += listOf("-clientid-size", NATIVE_CLIENT_ID_SIZE.toString())
         }
-        command += listOf("-record-type", args.type)
+        command += listOf("-record-type", args.type, "-rps", "5")
         command += args.resolver
         if (qname > 0) command += listOf("-max-qname-len", qname.toString())
         command += listOf(
