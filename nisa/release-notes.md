@@ -1,3 +1,8 @@
+Pembaruan 2.4.24:
+- SlowDNS di kartu seluler (terlihat di XL): resolver operator membuang query DNS yang namanya panjang, sehingga jabat tangan selalu timeout padahal Wi-Fi jalan. Jika jabat tangan timeout 2 kali, aplikasi kini otomatis menurunkan batas panjang nama query bertahap (130, 100, lalu batas terkecil) dan mencoba lagi. Tunnel jadi lebih lambat, tapi bisa tersambung.
+- Tab LOG menampilkan batas yang dipakai ("batas nama query ...") dan kapan batas diturunkan. Di Wi-Fi tidak ada perubahan karena batas bawaan tetap dipakai.
+- Setelah menekan sambung lewat kartu seluler, tunggu sampai sekitar 2 menit karena penurunan batas dicoba bertahap. Batas terakhir yang dipakai diingat selama aplikasi belum ditutup.
+
 Pembaruan 2.4.23:
 - Tab LOG kini menampilkan alasan asli saat forward SSH gagal (baris "SSH: forward ... gagal: ..."), sebelumnya baris ini tersaring dan tidak pernah terlihat. Dari sini penyebab internet tidak lewat tunnel bisa langsung diketahui.
 - SlowDNS: tes ping kini memakai HTTP biasa (balasan 301/302 dihitung berhasil), batas baca 40 detik, dan 6 percobaan dengan jeda 6 detik, karena tiap permintaan lewat DNS butuh beberapa detik.
