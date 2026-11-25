@@ -8,19 +8,25 @@ class SlowDnsQnameStepsTest {
 
     @Test
     fun stepsForShortDomainEndAtFloor() {
-        // "dns.nisavpn.biz.id" = 18 karakter, jadi batas terkecil 18 + 64 = 82.
-        assertEquals(listOf(0, 130, 100, 82), SlowDnsManager.qnameSteps("dns.nisavpn.biz.id"))
+        // Mode native (2.4.25): "dns.nisavpn.biz.id" = 18 karakter, batas terkecil 18 + 45 = 63.
+        assertEquals(listOf(0, 130, 100, 63), SlowDnsManager.qnameSteps("dns.nisavpn.biz.id"))
     }
 
     @Test
     fun stepsDropValuesBelowFloorForLongDomain() {
-        assertEquals(listOf(0, 130, 104), SlowDnsManager.qnameSteps("x".repeat(40)))
-        assertEquals(listOf(0, 134), SlowDnsManager.qnameSteps("x".repeat(70)))
+        assertEquals(listOf(0, 130, 100, 85), SlowDnsManager.qnameSteps("x".repeat(40)))
+        assertEquals(listOf(0, 130, 115), SlowDnsManager.qnameSteps("x".repeat(70)))
     }
 
     @Test
     fun stepsForTooLongDomainOnlyDefault() {
-        assertEquals(listOf(0), SlowDnsManager.qnameSteps("x".repeat(200)))
+        assertEquals(listOf(0), SlowDnsManager.qnameSteps("x".repeat(210)))
+    }
+
+    @Test
+    fun stepsForCompatModeUseHigherFloor() {
+        // Mode -dnstt-compat lama: overhead lebih besar, lantai domain + 64.
+        assertEquals(listOf(0, 130, 100, 82), SlowDnsManager.qnameSteps("dns.nisavpn.biz.id", compat = true))
     }
 
     @Test
@@ -28,14 +34,14 @@ class SlowDnsQnameStepsTest {
         val steps = SlowDnsManager.qnameSteps("dns.nisavpn.biz.id")
         assertEquals(130, SlowDnsManager.nextQname(steps, 0, 0))
         assertEquals(100, SlowDnsManager.nextQname(steps, 130, 0))
-        assertEquals(82, SlowDnsManager.nextQname(steps, 100, 0))
-        assertNull(SlowDnsManager.nextQname(steps, 82, 0))
+        assertEquals(63, SlowDnsManager.nextQname(steps, 100, 0))
+        assertNull(SlowDnsManager.nextQname(steps, 63, 0))
     }
 
     @Test
     fun nextQnameSkipsRejectedValues() {
         val steps = SlowDnsManager.qnameSteps("dns.nisavpn.biz.id")
-        // Klien menolak 82 (MTU di bawah minimum): dari 100 tidak ada langkah lagi.
-        assertNull(SlowDnsManager.nextQname(steps, 100, 82))
+        // Klien menolak 63 (MTU di bawah minimum): dari 100 tidak ada langkah lagi.
+        assertNull(SlowDnsManager.nextQname(steps, 100, 63))
     }
 }
