@@ -20,6 +20,59 @@ object SlowDnsManager {
     // Tipe record yang dikenal klien dnstt (libdnstt.so). Di luar daftar ini jatuh ke TXT.
     private val SUPPORTED_TYPES = setOf("txt", "null", "cname", "mx", "ns", "srv", "a", "aaaa", "caa")
 
+    // Pada operator tertentu (terlihat di XL) resolver hanya meneruskan query polling yang pendek
+    // (nama 47 karakter) dan membuang query berisi data yang namanya panjang, sehingga jabat tangan
+    // Noise selalu timeout. Klien mode dnstt-compat memakai nama sampai 253 karakter, jadi bila
+    // jabat tangan timeout berulang, batas panjang nama (-max-qname-len) diturunkan bertahap.
+    // Hapus bila server/klien tidak lagi dipakai lewat resolver yang membuang query panjang.
+    private const val HANDSHAKE_FAILS_BEFORE_STEP = 2
+
+    private const val QNAME_MAX = 253
+    private val QNAME_STEPS = intArrayOf(130, 100)
+
+    /**
+     * Urutan batas -max-qname-len dari yang terbesar: 0 = bawaan klien (253), lalu 130, 100, dan
+     * batas terkecil yang masih diizinkan. MTU minimum klien 25 byte; dengan ClientID 8 byte dan
+     * overhead dnstt, nama query minimal sepanjang domain + 62 karakter. Ditambah 2 sebagai cadangan.
+     */
+    internal fun qnameSteps(domain: String): List<Int> {
+        val floor = domain.trim().length + 64
+        if (floor > QNAME_MAX) return listOf(0)
+        return (listOf(0) + QNAME_STEPS.toList() + floor)
+            .filter { it == 0 || (it >= floor && it < QNAME_MAX) }
+            .distinct()
+    }
+
+    /** Batas berikutnya yang lebih kecil dari [current] dan lebih besar dari [rejected], atau null. */
+    internal fun nextQname(steps: List<Int>, current: Int, rejected: Int): Int? =
+        steps.firstOrNull { it != 0 && (current == 0 || it < current) && it > rejected }
+
+    private fun isHandshakeTimeout(line: String): Boolean =
+        line.contains("noise handshake", ignoreCase = true) && line.contains("timeout", ignoreCase = true)
+
+    private fun isMtuTooSmall(line: String): Boolean =
+        line.contains("MTU", ignoreCase = false) && line.contains("too small", ignoreCase = true)
+
+    private class LaunchArgs(
+        val context: Context,
+        val domain: String,
+        val type: String,
+        val key: String,
+        val resolver: List<String>,
+        val netKey: String,
+        val pubkeyPath: String
+    )
+
+    // Disimpan supaya klien bisa dijalankan ulang dengan batas nama query lain.
+    private var launchArgs: LaunchArgs? = null
+    private var currentQname = 0
+    private var rejectedQname = 0
+    private var handshakeFails = 0
+
+    // Batas yang terakhir dipakai per jaringan (domain + alamat DNS), supaya sambung ulang di
+    // jaringan yang sama langsung memakai batas yang sudah terbukti perlu. Hanya di memori.
+    private val learnedQname = HashMap<String, Int>()
+
     @Synchronized
     fun start(context: Context, domain: String, pubkey: String, doh: String, recordType: String = "") {
         TunnelLog.init(context)
@@ -39,6 +92,7 @@ object SlowDnsManager {
         }
         process = null
         currentKey = null
+        launchArgs = null
 
         val binaryPath = File(context.applicationInfo.nativeLibraryDir, "libdnstt.so").absolutePath
         if (!File(binaryPath).exists()) {
@@ -55,45 +109,108 @@ object SlowDnsManager {
             return
         }
 
-        // Klien VayDNS (libdnstt.so) dalam mode kompatibel dnstt, supaya cocok dengan server dnstt.
-        val command = mutableListOf(binaryPath, "-dnstt-compat", "-record-type", type)
         val resolver = resolverArgs(context, doh)
-        command += resolver
+        val args = LaunchArgs(
+            context = context.applicationContext,
+            domain = domain.trim(),
+            type = type,
+            key = key,
+            resolver = resolver,
+            netKey = "${domain.trim()}|${resolver.joinToString(" ")}",
+            pubkeyPath = pubkeyFile.absolutePath
+        )
+        launchArgs = args
+        rejectedQname = 0
+        TunnelLog.add("SlowDNS: tipe record $type, DNS ${resolver.joinToString(" ")} (isian profil: ${doh.trim().ifEmpty { "kosong" }})")
+        launchLocked(args, learnedQname[args.netKey] ?: 0)
+    }
+
+    /** Menjalankan klien dnstt. [qname] 0 = batas nama query bawaan klien. Dipanggil dengan lock dipegang. */
+    private fun launchLocked(args: LaunchArgs, qname: Int) {
+        val binaryPath = File(args.context.applicationInfo.nativeLibraryDir, "libdnstt.so").absolutePath
+        // Klien VayDNS (libdnstt.so) dalam mode kompatibel dnstt, supaya cocok dengan server dnstt.
+        val command = mutableListOf(binaryPath, "-dnstt-compat", "-record-type", args.type)
+        command += args.resolver
+        if (qname > 0) command += listOf("-max-qname-len", qname.toString())
         command += listOf(
-            "-pubkey-file", pubkeyFile.absolutePath,
-            "-domain", domain.trim(),
+            "-pubkey-file", args.pubkeyPath,
+            "-domain", args.domain,
             "-listen", "127.0.0.1:$SLOW_DNS_LOCAL_PORT"
         )
-        TunnelLog.add("SlowDNS: tipe record $type, DNS ${resolver.joinToString(" ")} (isian profil: ${doh.trim().ifEmpty { "kosong" }})")
+        currentQname = qname
+        handshakeFails = 0
+        if (qname > 0) TunnelLog.add("SlowDNS: batas nama query $qname (lebih kecil dari bawaan, tunnel lebih lambat)")
 
         try {
-            TunnelLog.detail("SlowDNS: memulai ${domain.trim()}")
+            TunnelLog.detail("SlowDNS: memulai ${args.domain}")
             val pb = ProcessBuilder(command).redirectErrorStream(true)
             // Klien Go dibuild untuk linux, jadi tidak tahu lokasi CA Android. Tanpa ini DoH/DoT gagal
             // dengan "x509: certificate signed by unknown authority".
             pb.environment()["SSL_CERT_DIR"] = "/apex/com.android.conscrypt/cacerts:/system/etc/security/cacerts"
             val p = pb.start()
             process = p
-            currentKey = key
+            currentKey = args.key
             // Wajib dibaca terus: kalau tidak, buffer pipa penuh dan dnstt macet.
             // Sekaligus menampilkan error/usage dnstt di logcat (tag SlowDnsManager).
             thread(isDaemon = true, name = "dnstt-log") {
+                var mtuRejected = false
                 try {
                     p.inputStream.bufferedReader().forEachLine {
                         Log.i(TAG, it)
                         // Peringatan/error klien (mis. tipe record dipaksa ke TXT) selalu ditampilkan.
                         if (it.contains("level=warn") || it.contains("level=error")) TunnelLog.add("SlowDNS: $it")
                         else TunnelLog.essential("SlowDNS: $it")
+                        if (isMtuTooSmall(it)) {
+                            mtuRejected = true
+                        } else if (isHandshakeTimeout(it)) {
+                            onHandshakeTimeout(p)
+                        }
                     }
                 } catch (_: Exception) {
                 }
                 Log.w(TAG, "dnstt berhenti")
                 TunnelLog.detail("SlowDNS: berhenti")
+                if (mtuRejected) onQnameRejected(p)
             }
         } catch (e: Exception) {
             Log.e(TAG, "Gagal menjalankan dnstt", e)
             TunnelLog.add("SlowDNS: gagal menjalankan: ${e.message}")
         }
+    }
+
+    /** Jabat tangan timeout lagi: setelah beberapa kali, jalankan ulang dengan batas nama query lebih kecil. */
+    @Synchronized
+    private fun onHandshakeTimeout(p: Process) {
+        if (process !== p) return // proses ini sudah diganti atau dihentikan
+        handshakeFails++
+        if (handshakeFails < HANDSHAKE_FAILS_BEFORE_STEP) return
+        val args = launchArgs ?: return
+        val next = nextQname(qnameSteps(args.domain), currentQname, rejectedQname)
+        if (next == null) {
+            if (handshakeFails == HANDSHAKE_FAILS_BEFORE_STEP) {
+                TunnelLog.add("SlowDNS: jabat tangan tetap timeout di batas nama query terkecil. Periksa server, tipe record, atau coba DNS lain di profil")
+            }
+            return
+        }
+        TunnelLog.add("SlowDNS: jabat tangan timeout $handshakeFails kali, mencoba batas nama query $next")
+        learnedQname[args.netKey] = next
+        stopLocked()
+        launchLocked(args, next)
+    }
+
+    /** Klien menolak batas ini (MTU di bawah minimum): kembali ke batas sebelumnya dan jangan turun lagi. */
+    @Synchronized
+    private fun onQnameRejected(p: Process) {
+        if (process !== p) return
+        val args = launchArgs ?: return
+        val rejected = currentQname
+        if (rejected == 0) return
+        rejectedQname = rejected
+        val back = qnameSteps(args.domain).lastOrNull { it == 0 || it > rejected } ?: 0
+        learnedQname[args.netKey] = back
+        TunnelLog.add("SlowDNS: batas nama query $rejected ditolak klien, kembali ke ${if (back == 0) "bawaan" else back.toString()}")
+        stopLocked()
+        launchLocked(args, back)
     }
 
     /** Binary Go di Android tidak punya DNS sendiri, jadi nama host di-resolve di sini. */
