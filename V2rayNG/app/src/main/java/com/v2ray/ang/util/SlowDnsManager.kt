@@ -290,8 +290,11 @@ object SlowDnsManager {
 
     private fun resolverArgs(context: Context, raw: String): List<String> {
         val r = raw.trim()
-        // NISA_DOH_DEFAULT: kosong = DoH Cloudflare. Resolver operator (XL) memalsukan NXDOMAIN untuk query data, DoH melewatinya.
-        if (r.isEmpty()) return listOf("-doh", "https://1.1.1.1/dns-query")
+        // NISA_DOH_DEFAULT: kosong = resolver sistem (operator). Diubah dari DoH Cloudflare karena
+        // 1.1.1.1/8.8.8.8 terbukti kena RST (ECONNRESET) di TLS handshake lewat jaringan XL,
+        // sementara query UDP biasa ke resolver operator terbukti diteruskan dengan benar sampai
+        // panjang nama 59 karakter (NOERROR, tanpa NXDOMAIN palsu).
+        if (r.isEmpty()) return systemResolverArgs(context)
         return when {
             r.equals("sistem", ignoreCase = true) || r.equals("system", ignoreCase = true) -> systemResolverArgs(context)
             r.startsWith("https://", ignoreCase = true) -> listOf("-doh", dohUrlWithIp(r))
