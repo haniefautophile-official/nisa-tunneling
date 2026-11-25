@@ -19,6 +19,15 @@ object SlowDnsManager {
     private const val NATIVE_CLIENT_ID_SIZE = 1
     private const val QNAME_MAX = 253
     private val QNAME_STEPS = intArrayOf(80, 70, 60, 55, 50, 45, 40)
+    // MTU kecil (turunan panjang domain) bikin satu paket SSH kepecah jadi banyak paket KCP.
+    // Window KCP default binary (256) terlalu besar untuk kondisi itu: satu burst SSH bisa
+    // nembak ratusan query DNS sekaligus, kena rate-limit XL, lalu drop -> retransmit -> makin
+    // penuh. Diperkecil supaya jumlah query per detik lebih terkendali.
+    private const val KCP_WINDOW_SIZE = 32
+    // "drop": paket kelebihan dibuang saat antrian penuh -> KCP anggap packet loss -> retransmit
+    // -> menambah beban saat kondisi sudah rawan. "block": pengirim ditahan/mundur dulu, lebih
+    // stabil di jalur yang gampang macet meski throughput lebih rendah.
+    private const val QUEUE_OVERFLOW_MODE = "block"
 
     internal fun qnameSteps(domain: String, compat: Boolean = USE_DNSTT_COMPAT): List<Int> {
         val floor = domain.trim().length + if (compat) 64 else 45
@@ -116,6 +125,8 @@ object SlowDnsManager {
             command += listOf("-clientid-size", NATIVE_CLIENT_ID_SIZE.toString())
         }
         command += listOf("-record-type", args.type)
+        command += listOf("-kcp-window-size", KCP_WINDOW_SIZE.toString())
+        command += listOf("-queue-overflow", QUEUE_OVERFLOW_MODE)
         command += args.resolver
         if (qname > 0) command += listOf("-max-qname-len", qname.toString())
         command += listOf(
