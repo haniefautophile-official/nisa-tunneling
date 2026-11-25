@@ -1,14 +1,15 @@
-# 2.4.25
+# 2.4.26
 
 - SlowDNS: klien dnstt (libdnstt.so) sekarang dijalankan dalam mode wire native VayDNS
-  (`-clientid-size 1`), bukan `-dnstt-compat`. Overhead per query turun dari 13 byte
+  (`-clientid-size 2`, sama dengan bawaan vaydns-server), bukan `-dnstt-compat`. Overhead per query turun dari 13 byte
   jadi 2 byte, jadi nama query minimum ikut lebih pendek.
+  Catatan: build sebelumnya masih mengirim format compat; mode native baru aktif di build ini.
 - PENTING: ini mengubah format data di jaringan. Server (dnstt-server-multi /
-  vaydns-server) WAJIB diganti ke `-clientid-size 1` dan TANPA `-dnstt-compat` di
+  vaydns-server) WAJIB diganti ke `-clientid-size 2` dan TANPA `-dnstt-compat` di
   server yang sama, kalau tidak jabat tangan gagal total (bukan sekadar lambat).
   Jangan deploy build ini ke user sebelum server test lolos.
 - Batas `-max-qname-len` otomatis (dipakai saat jabat tangan timeout berulang)
-  disesuaikan ke lantai mode native: domain + 45, bukan domain + 64 seperti di
+  disesuaikan ke lantai mode native: domain + 45 + clientid (65 untuk dns.nisavpn.biz.id), bukan domain + 64 seperti di
   mode compat lama.
 - Perubahan ini bagian dari investigasi kenapa tunnel gagal konek di resolver
   operator (XL) yang membuang query DNS dengan nama di atas ~49 karakter.
