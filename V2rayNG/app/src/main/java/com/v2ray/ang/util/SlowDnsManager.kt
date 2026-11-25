@@ -20,29 +20,26 @@ object SlowDnsManager {
     // Tipe record yang dikenal klien dnstt (libdnstt.so). Di luar daftar ini jatuh ke TXT.
     private val SUPPORTED_TYPES = setOf("txt", "null", "cname", "mx", "ns", "srv", "a", "aaaa", "caa")
 
-    // NISA_QNAME_V2: satu timeout langsung memicu turun batas. Di XL, resolver membuang query
-    // panjang tanpa memberi jawaban, jadi menunggu dua kali timeout hanya memperlambat.
+    // NISA_QNAME_V3: satu timeout langsung memicu turun batas.
     private const val HANDSHAKE_FAILS_BEFORE_STEP = 1
 
-    // Sejak 2.4.25: klien dipakai dalam mode wire native VayDNS (bukan -dnstt-compat), karena
-    // overhead per-query jauh lebih kecil (ClientID 1 byte + 1 byte panjang, vs 8+1+3+1 byte
-    // di mode compat). Server (dnstt-server-multi / vaydns-server) WAJIB dijalankan dengan
-    // -clientid-size 1 dan TANPA -dnstt-compat, atau jabat tangan gagal total (bukan lambat).
-    // Set true cuma kalau perlu balik ke server dnstt-compat lama.
     private const val USE_DNSTT_COMPAT = false
     private const val NATIVE_CLIENT_ID_SIZE = 1
 
     private const val QNAME_MAX = 253
-    // NISA_QNAME_V2: langkah dibuat jauh lebih rendah dari sebelumnya. XL membuang query data
-    // di sekitar 49 karakter, jadi 130 dan 100 selalu ditolak. Langkah baru mulai dari 80 turun
-    // ke 45 supaya masih ada ruang untuk handshake Noise setelah base32 + ClientID.
-    private val QNAME_STEPS = intArrayOf(80, 70, 60, 55, 50, 45)
+    // NISA_QNAME_V3: langkah jauh di bawah versi lama. XL membuang query data di sekitar 49
+    // karakter, jadi 130 dan 100 selalu ditolak. Langkah baru mulai dari 80 turun ke 40 supaya
+    // domain pendek masih punya ruang handshake setelah base32 + ClientID.
+    private val QNAME_STEPS = intArrayOf(80, 70, 60, 55, 50, 45, 40)
 
     /**
      * Urutan batas -max-qname-len dari yang terbesar: 0 = bawaan klien, lalu 80, 70, 60, 55,
-     * 50, 45, dan batas terkecil yang masih diizinkan. Lantai (floor) beda per mode wire format:
+     * 50, 45, 40, dan batas terkecil yang masih diizinkan. Lantai (floor) beda per mode wire format:
      *  - compat: ClientID 8 byte + padding (overhead 13 byte) -> lantai domain + 61, dibulatkan 64.
      *  - native: ClientID 1 byte (overhead 2 byte) -> lantai domain + 43, dibulatkan 45.
+     * NISA_QNAME_V3: lantai dihitung dari panjang domain nyata, jadi domain panjang seperti
+     * xray.nisavpn.biz.id (21 karakter) menghasilkan lantai 66 dan langkah 45/40 otomatis dibuang.
+     * Kalau semua langkah di bawah lantai, hanya 0 yang tersisa dan turun QNAME tidak akan menolong.
      */
     internal fun qnameSteps(domain: String, compat: Boolean = USE_DNSTT_COMPAT): List<Int> {
         val floor = domain.trim().length + if (compat) 64 else 45
@@ -59,7 +56,7 @@ object SlowDnsManager {
     private fun isHandshakeTimeout(line: String): Boolean =
         line.contains("noise handshake", ignoreCase = true) && line.contains("timeout", ignoreCase = true)
 
-    // NISA_QNAME_V2: klien kadang keluar dengan "effective MTU" < 48 atau "MTU too small" atau
+    // NISA_QNAME_V3: klien kadang keluar dengan "effective MTU" < 48 atau "MTU too small" atau
     // "mtu rejected". Semua bentuk itu harus dianggap penolakan supaya batas QNAME tidak diulang.
     private fun isMtuTooSmall(line: String): Boolean {
         val lower = line.lowercase()
@@ -99,10 +96,7 @@ object SlowDnsManager {
         }
         val key = "${domain.trim()}|${pubkey.trim()}|${doh.trim()}|$type"
         if (process?.isAlive == true) {
-            // Parameter sama: pakai terus dnstt yang sudah jalan (perilaku lama, aman untuk SSH).
             if (key == currentKey) return
-            // Parameter beda (pindah profil): matikan dnstt lama, kalau tidak profil baru
-            // akan masuk ke tunnel domain/pubkey lama dan semua koneksi gagal.
             TunnelLog.detail("SlowDNS: profil berganti, dnstt lama dimatikan")
             stopLocked()
         }
@@ -144,9 +138,6 @@ object SlowDnsManager {
     /** Menjalankan klien dnstt. [qname] 0 = batas nama query bawaan klien. Dipanggil dengan lock dipegang. */
     private fun launchLocked(args: LaunchArgs, qname: Int) {
         val binaryPath = File(args.context.applicationInfo.nativeLibraryDir, "libdnstt.so").absolutePath
-        // Klien VayDNS (libdnstt.so). Mode native (bukan -dnstt-compat) dipakai sejak 2.4.25 karena
-        // overhead per-query jauh lebih kecil; server WAJIB dipasangkan dengan -clientid-size 1 dan
-        // TANPA -dnstt-compat, kalau tidak jabat tangan gagal total.
         val command = mutableListOf(binaryPath)
         if (USE_DNSTT_COMPAT) {
             command += listOf("-dnstt-compat")
@@ -168,30 +159,25 @@ object SlowDnsManager {
         try {
             TunnelLog.detail("SlowDNS: memulai ${args.domain}")
             val pb = ProcessBuilder(command).redirectErrorStream(true)
-            // Klien Go dibuild untuk linux, jadi tidak tahu lokasi CA Android. Tanpa ini DoH/DoT gagal
-            // dengan "x509: certificate signed by unknown authority".
             pb.environment()["SSL_CERT_DIR"] = "/apex/com.android.conscrypt/cacerts:/system/etc/security/cacerts"
             val p = pb.start()
             process = p
             currentKey = args.key
-            // Wajib dibaca terus: kalau tidak, buffer pipa penuh dan dnstt macet.
-            // Sekaligus menampilkan error/usage dnstt di logcat (tag SlowDnsManager).
+            // NISA_QNAME_V3: pembaca pipa hanya mencatat flag. Tidak memanggil stopLocked() dari
+            // thread ini, karena itu menutup inputStream yang sedang dibaca dan memunculkan
+            // "read/write on closed pipe". Evaluasi dilakukan di thread terpisah setelah proses
+            // benar-benar berhenti.
             thread(isDaemon = true, name = "dnstt-log") {
                 var mtuRejected = false
                 var handshakeTimedOut = false
                 try {
                     p.inputStream.bufferedReader().forEachLine {
                         Log.i(TAG, it)
-                        // Peringatan/error klien (mis. tipe record dipaksa ke TXT) selalu ditampilkan.
                         if (it.contains("level=warn") || it.contains("level=error")) TunnelLog.add("SlowDNS: $it")
                         else TunnelLog.essential("SlowDNS: $it")
                         if (isMtuTooSmall(it)) {
                             mtuRejected = true
                         } else if (isHandshakeTimeout(it)) {
-                            // NISA_QNAME_V2: jangan panggil onHandshakeTimeout() dari thread ini.
-                            // stopLocked() di dalamnya akan menutup inputStream yang sedang dibaca
-                            // dan membuat process !== p saat fungsi jalan, sehingga turun QNAME
-                            // tidak pernah terjadi. Cukup catat flag, proses setelah proses mati.
                             handshakeTimedOut = true
                         }
                     }
@@ -199,8 +185,6 @@ object SlowDnsManager {
                 }
                 Log.w(TAG, "dnstt berhenti")
                 TunnelLog.detail("SlowDNS: berhenti")
-                // NISA_QNAME_V2: evaluasi setelah proses benar-benar berhenti, di thread terpisah
-                // supaya lock start()/stop() tidak deadlock dengan pembaca pipa.
                 if (mtuRejected) {
                     thread(isDaemon = true, name = "dnstt-qname-reject") { onQnameRejected(p) }
                 } else if (handshakeTimedOut) {
@@ -213,23 +197,39 @@ object SlowDnsManager {
         }
     }
 
-    /** Jabat tangan timeout: setelah beberapa kali, jalankan ulang dengan batas nama query lebih kecil. */
+    /**
+     * NISA_QNAME_V3: jabat tangan timeout. Proses lama dimatikan dulu (destroy + tunggu keluar)
+     * tanpa memanggil stopLocked() dari pembaca pipa, lalu launch ulang dengan batas lebih kecil.
+     */
     @Synchronized
     private fun onHandshakeTimeout(p: Process) {
-        if (process !== p) return // proses ini sudah diganti atau dihentikan
+        if (process !== p) return
         handshakeFails++
         if (handshakeFails < HANDSHAKE_FAILS_BEFORE_STEP) return
         val args = launchArgs ?: return
         val next = nextQname(qnameSteps(args.domain), currentQname, rejectedQname)
         if (next == null) {
             if (handshakeFails == HANDSHAKE_FAILS_BEFORE_STEP) {
-                TunnelLog.add("SlowDNS: jabat tangan tetap timeout di batas nama query terkecil. Periksa server, tipe record, atau coba DNS lain di profil")
+                TunnelLog.add("SlowDNS: jabat tangan tetap timeout di batas nama query terkecil (lantai domain ${args.domain.length + 45}). Coba domain tunnel lebih pendek atau ganti transport (WS/TLS port 443)")
             }
             return
         }
         TunnelLog.add("SlowDNS: jabat tangan timeout $handshakeFails kali, mencoba batas nama query $next")
         learnedQname[args.netKey] = next
-        stopLocked()
+        // Matikan proses lama tanpa stopLocked(): stopLocked() menutup process field, tapi proses
+        // ini sudah berhenti sendiri (pipa habis), jadi cukup destroy untuk memastikan.
+        try { p.destroy() } catch (_: Exception) { }
+        var waited = 0
+        while (waited < 1500) {
+            val exited = try { p.exitValue(); true } catch (_: IllegalThreadStateException) { false }
+            if (exited) break
+            try { Thread.sleep(50) } catch (_: InterruptedException) { break }
+            waited += 50
+        }
+        if (process === p) {
+            process = null
+            currentKey = null
+        }
         launchLocked(args, next)
     }
 
@@ -244,7 +244,18 @@ object SlowDnsManager {
         val back = qnameSteps(args.domain).lastOrNull { it == 0 || it > rejected } ?: 0
         learnedQname[args.netKey] = back
         TunnelLog.add("SlowDNS: batas nama query $rejected ditolak klien, kembali ke ${if (back == 0) "bawaan" else back.toString()}")
-        stopLocked()
+        try { p.destroy() } catch (_: Exception) { }
+        var waited = 0
+        while (waited < 1500) {
+            val exited = try { p.exitValue(); true } catch (_: IllegalThreadStateException) { false }
+            if (exited) break
+            try { Thread.sleep(50) } catch (_: InterruptedException) { break }
+            waited += 50
+        }
+        if (process === p) {
+            process = null
+            currentKey = null
+        }
         launchLocked(args, back)
     }
 
@@ -265,7 +276,6 @@ object SlowDnsManager {
         return ip ?: host
     }
 
-    /** Penyedia DNS umum: sertifikatnya memuat alamat IP, jadi aman dipanggil lewat IP. */
     private val KNOWN_RESOLVER_IPS = mapOf(
         "dns.google" to "8.8.8.8",
         "cloudflare-dns.com" to "1.1.1.1",
@@ -276,7 +286,6 @@ object SlowDnsManager {
     private fun hostToIp(host: String): String =
         KNOWN_RESOLVER_IPS[host.lowercase()] ?: resolveHost(host)
 
-    /** Klien Go di Android tidak bisa resolve nama, jadi host pada URL DoH diganti alamat IP-nya. */
     private fun dohUrlWithIp(url: String): String {
         val m = Regex("^(https://)([^/:\\[]+)(.*)$", RegexOption.IGNORE_CASE).find(url) ?: return url
         val host = m.groupValues[2]
@@ -284,10 +293,6 @@ object SlowDnsManager {
         return m.groupValues[1] + hostToIp(host) + m.groupValues[3]
     }
 
-    /**
-     * "sistem": pakai DNS resolver milik jaringan yang sedang dipakai HP (operator atau Wi-Fi),
-     * di luar VPN. Operator seluler biasanya hanya meneruskan UDP 53 ke resolvernya sendiri.
-     */
     private fun systemResolverArgs(context: Context): List<String> {
         val fallback = listOf("-doh", "https://1.1.1.1/dns-query")
         val chosen: String? = try {
@@ -300,7 +305,6 @@ object SlowDnsManager {
                     if (!caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)) continue
                     val ip = cm.getLinkProperties(n)?.dnsServers.orEmpty()
                         .filterIsInstance<Inet4Address>().firstOrNull()?.hostAddress ?: continue
-                    // Wi-Fi didahulukan (itu jalur utama kalau tersambung), lalu seluler, lalu lainnya.
                     val rank = when {
                         caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) -> 0
                         caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR) -> 1
@@ -325,7 +329,6 @@ object SlowDnsManager {
     private fun withPort(hostPort: String, defaultPort: Int): String =
         if (Regex(".*:\\d+$").matches(hostPort)) hostPort else "$hostPort:$defaultPort"
 
-    /** Kosong atau "sistem" = DNS resolver operator/jaringan HP lewat UDP 53 (jalan tanpa kuota). Fallback DoH 1.1.1.1 hanya jika DNS sistem tidak ditemukan. https:// = DoH, tls:// atau dot:// = DoT, lainnya = UDP host[:port]. */
     private fun resolverArgs(context: Context, raw: String): List<String> {
         val r = raw.trim()
         if (r.isEmpty()) return systemResolverArgs(context)
@@ -345,7 +348,6 @@ object SlowDnsManager {
         }
     }
 
-    /** True bila klien dnstt sedang jalan (dipakai AutoPing untuk memberi batas waktu lebih longgar). */
     fun isActive(): Boolean = process?.isAlive == true
 
     @Synchronized
@@ -359,7 +361,6 @@ object SlowDnsManager {
         currentKey = null
         if (p == null) return
         try { p.destroy() } catch (_: Exception) { }
-        // Tunggu sebentar sampai proses benar-benar keluar agar port lokal bebas lagi.
         var waited = 0
         while (waited < 1500) {
             val exited = try { p.exitValue(); true } catch (_: IllegalThreadStateException) { false }
