@@ -1,3 +1,11 @@
+# 2.4.29
+
+- SlowDNS (mode UDP): batas tunggu balasan per query dinaikkan dari 500 ms ke 2 detik
+  (`-udp-timeout 2s`) supaya balasan yang agak telat dari resolver operator tidak dibuang.
+  Jalur DoH dan DoT tidak berubah.
+- Cek update di dalam aplikasi diperbaiki: pembanding versi tidak lagi gagal pada tag
+  yang memuat huruf, dan pemilihan file APK mencoba semua ABI perangkat sebelum menyerah.
+
 # 2.4.28
 
 - SlowDNS: klien kembali ke format dnstt klasik (`-dnstt-compat`) supaya cocok dengan
