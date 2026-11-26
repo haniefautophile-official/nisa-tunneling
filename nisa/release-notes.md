@@ -1,3 +1,12 @@
+# 2.4.31
+
+- SlowDNS mode UDP: kolom DNS sekarang boleh memuat opsi penyetelan setelah alamat resolver,
+  dipisah `|`. Contoh: `112.215.198.254|rps=40,workers=20,timeout=1500ms`.
+  Opsi: `rps` (batas query per detik), `workers` (jumlah worker UDP, bawaan 100),
+  `timeout` (tunggu balasan per query, bawaan 2s), `shared=1` (satu socket bersama).
+  Tanpa opsi, perilakunya sama seperti 2.4.30. Opsi yang dipakai tercatat di tab Log
+  ("SlowDNS UDP: ..."), nilai yang salah diabaikan dan diberi peringatan di Log.
+
 # 2.4.30
 
 - Notifikasi update otomatis: saat aplikasi dibuka, versi terbaru dicek di latar belakang dan
