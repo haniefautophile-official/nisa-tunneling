@@ -75,6 +75,20 @@ object SlowDnsManager {
     private var fixedQname = false
     private var gen = 0
 
+    // Type "Otomatis": probe tipe record yang lolos di resolver, lalu coba satu per satu sampai jabat tangan berhasil.
+    private var autoMode = false
+    private var autoCandidates: List<String> = emptyList()
+    private var autoIndex = 0
+    private var currentType = ""
+    private val learnedType = HashMap<String, String>()
+    private const val AUTO_MAX_CANDIDATES = 4
+    private const val AUTO_TIMEOUT_WINDOW_MS = 90_000L
+
+    private fun isAutoType(t: String): Boolean {
+        val r = t.trim().lowercase()
+        return r.isEmpty() || r == "otomatis" || r == "auto"
+    }
+
     // Disimpan di memori per jaringan: qname yang berhasil dan batas yang ditolak klien (MTU terlalu kecil).
     private val learnedQname = HashMap<String, Int>()
     private val rejectedQname = HashMap<String, Int>()
@@ -133,7 +147,44 @@ object SlowDnsManager {
             }
             params = p
             currentQname = learnedQname[key(p)] ?: 0
-            launchLocked(p)
+            autoMode = isAutoType(p.recordType)
+            if (autoMode) startAutoLocked(p) else launchLocked(p)
+        }
+    }
+
+    /**
+     * Type "Otomatis": probe di thread latar (tidak menahan lock), lalu jalankan klien dengan tipe teratas.
+     * Kalau start() dipanggil lagi atau stop() dipanggil selama probe, hasil probe dibuang (cek gen).
+     */
+    private fun startAutoLocked(p: Params) {
+        val myGen = gen
+        val k = key(p)
+        val learned = learnedType[k]
+        thread(isDaemon = true, name = "nisa-slowdns-probe") {
+            val isUdp = p.doh.isNotEmpty() && !p.doh.startsWith("http", ignoreCase = true) &&
+                !p.doh.startsWith("tls://", ignoreCase = true)
+            val udpAddr = if (isUdp) SlowDnsUdpOptions.parse(p.doh, UDP_TIMEOUT).address else ""
+            val ranked: List<String>
+            if (udpAddr.isNotEmpty()) {
+                val results = SlowDnsTypeProbe.probeAll(udpAddr, p.domain)
+                TunnelLog.add("SlowDNS Otomatis: probe $udpAddr -> ${results.joinToString(" ")}")
+                ranked = SlowDnsTypeProbe.rank(results, learned)
+            } else {
+                TunnelLog.add("SlowDNS Otomatis: resolver DoH/DoT/operator, probe dilewati")
+                ranked = SlowDnsTypeProbe.ALL_TYPES
+            }
+            synchronized(lock) {
+                if (myGen != gen) return@thread
+                if (ranked.isEmpty()) {
+                    TunnelLog.add("SlowDNS Otomatis: resolver tidak menjawab tipe record apa pun, tetap coba AAAA")
+                }
+                autoCandidates = ranked.ifEmpty { listOf(SlowDnsTypeProbe.PREFERRED_TYPE) }.take(AUTO_MAX_CANDIDATES)
+                autoIndex = 0
+                currentType = autoCandidates[0]
+                learnedType[k] = currentType
+                TunnelLog.add("SlowDNS Otomatis: mencoba ${currentType.uppercase()} (urutan ${autoCandidates.joinToString(",") { it.uppercase() }})")
+                launchLocked(p)
+            }
         }
     }
 
@@ -208,8 +259,8 @@ object SlowDnsManager {
         cmd += listOf("-listen", "127.0.0.1:$SLOW_DNS_LOCAL_PORT")
         cmd += listOf("-reconnect-min", RECONNECT_MIN, "-reconnect-max", RECONNECT_MAX)
         if (USE_DNSTT_COMPAT) cmd += "-dnstt-compat" else cmd += listOf("-clientid-size", NATIVE_CLIENT_ID_SIZE.toString())
-        val rt = p.recordType.lowercase()
-        if (rt.isNotEmpty() && rt != "otomatis" && rt != "auto") cmd += listOf("-record-type", rt)
+        val rt = if (autoMode) currentType else p.recordType.trim().lowercase()
+        if (rt.isNotEmpty() && !isAutoType(rt)) cmd += listOf("-record-type", rt)
         val floor = qnameFloor(p.domain, USE_DNSTT_COMPAT, NATIVE_CLIENT_ID_SIZE)
         if (qnameOverride != null) {
             val q = qnameOverride.coerceIn(floor.coerceAtMost(MAX_QNAME), MAX_QNAME)
@@ -246,7 +297,7 @@ object SlowDnsManager {
                 if (tooSmall.containsMatchIn(line)) {
                     onTooSmall(myGen, p)
                 } else if (timeoutWords.containsMatchIn(line) &&
-                    System.currentTimeMillis() - startedAt < TIMEOUT_WINDOW_MS
+                    System.currentTimeMillis() - startedAt < (if (autoMode) AUTO_TIMEOUT_WINDOW_MS else TIMEOUT_WINDOW_MS)
                 ) {
                     timeouts++
                     if (timeouts >= TIMEOUTS_BEFORE_STEP) {
@@ -277,11 +328,31 @@ object SlowDnsManager {
 
     private fun stepDown(myGen: Int, p: Params) {
         synchronized(lock) {
-            if (myGen != gen || fixedQname) return
+            if (myGen != gen) return
+            if (autoMode && autoIndex + 1 < autoCandidates.size) {
+                // Type Otomatis: tipe ini tidak berhasil jabat tangan, coba tipe berikutnya.
+                autoIndex++
+                currentType = autoCandidates[autoIndex]
+                learnedType[key(p)] = currentType
+                TunnelLog.add("SlowDNS Otomatis: jabat tangan gagal, coba tipe ${currentType.uppercase()}")
+                relaunchLocked(p, currentQname)
+                return
+            }
+            if (fixedQname) return
             val k = key(p)
             val steps = qnameSteps(p.domain, USE_DNSTT_COMPAT, NATIVE_CLIENT_ID_SIZE)
-            val next = nextQname(steps, currentQname, rejectedQname[k] ?: 0) ?: return
+            val next = nextQname(steps, currentQname, rejectedQname[k] ?: 0) ?: run {
+                if (autoMode) {
+                    learnedType.remove(k)
+                    TunnelLog.add("SlowDNS Otomatis: semua tipe dan qname sudah dicoba, jabat tangan tetap gagal; cek tipe record di server")
+                }
+                return
+            }
             learnedQname[k] = next
+            if (autoMode && autoCandidates.isNotEmpty()) {
+                autoIndex = 0
+                currentType = autoCandidates[0]
+            }
             TunnelLog.add("SlowDNS: jabat tangan timeout berulang, coba -max-qname-len $next")
             relaunchLocked(p, next)
         }
