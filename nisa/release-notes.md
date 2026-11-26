@@ -1,3 +1,9 @@
+# 2.4.30
+
+- Notifikasi update otomatis: saat aplikasi dibuka, versi terbaru dicek di latar belakang dan
+  dialog "Versi baru ditemukan" langsung muncul jika ada update, tanpa harus buka menu
+  Cek Update. Jika offline atau GitHub tidak terjangkau, tidak ada pesan apa pun.
+
 # 2.4.29
 
 - SlowDNS (mode UDP): batas tunggu balasan per query dinaikkan dari 500 ms ke 2 detik
