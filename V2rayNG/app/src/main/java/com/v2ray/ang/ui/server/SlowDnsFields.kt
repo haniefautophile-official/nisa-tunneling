@@ -18,7 +18,7 @@ import com.v2ray.ang.ui.compose.FormDropdownField
 import com.v2ray.ang.ui.compose.FormTextField
 
 /**
- * Semua tipe record yang didukung klien dnstt (libdnstt.so). "Otomatis" = TXT (standar dnstt).
+ * Semua tipe record yang didukung klien dnstt (libdnstt.so). "Otomatis" = aplikasi menguji tipe yang lolos di DNS lalu memakai yang berhasil.
  * Tipe di sini HARUS sama dengan tipe yang dilayani server SlowDNS.
  */
 val SLOWDNS_TYPE_OPTIONS = listOf("Otomatis", "TXT", "NULL", "CNAME", "MX", "NS", "SRV", "A", "AAAA", "CAA")
@@ -93,7 +93,7 @@ fun SlowDnsFields(state: SlowDnsFormState) {
             state.type,
             SLOWDNS_TYPE_OPTIONS,
             { state.type = it },
-            supportingText = "Harus sama dengan tipe record di server"
+            supportingText = "Otomatis: uji tipe yang lolos lalu pakai yang berhasil. Manual: harus sama dengan server"
         )
         FormTextField(
             label = "NS Domain (contoh: ns.domain.com)",
