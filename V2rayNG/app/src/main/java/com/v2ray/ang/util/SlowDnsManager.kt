@@ -179,8 +179,17 @@ object SlowDnsManager {
             p.doh.startsWith("http", ignoreCase = true) -> cmd += listOf("-doh", p.doh)
             p.doh.startsWith("tls://", ignoreCase = true) -> cmd += listOf("-dot", p.doh.substring(6))
             else -> {
-                cmd += listOf("-udp", if (p.doh.contains(':')) p.doh else p.doh + ":53")
-                cmd += listOf("-udp-timeout", UDP_TIMEOUT)
+                // Mode UDP: "alamat[:port]" boleh diikuti "|rps=..,workers=..,timeout=..,shared=1" (lihat SlowDnsUdpOptions).
+                val udp = SlowDnsUdpOptions.parse(p.doh, UDP_TIMEOUT)
+                udp.warnings.forEach { TunnelLog.add("SlowDNS: $it") }
+                if (udp.address.isEmpty()) {
+                    TunnelLog.add("SlowDNS: alamat resolver kosong sebelum '|', pakai DoH bawaan")
+                    cmd += listOf("-doh", DEFAULT_DOH)
+                } else {
+                    cmd += listOf("-udp", if (udp.address.contains(':')) udp.address else udp.address + ":53")
+                    cmd += udp.flags
+                    TunnelLog.add("SlowDNS UDP: ${udp.summary}")
+                }
             }
         }
         cmd += listOf("-domain", p.domain, "-pubkey-file", pubFile.absolutePath)
