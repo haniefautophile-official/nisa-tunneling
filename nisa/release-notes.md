@@ -1,3 +1,22 @@
+# 2.4.33
+
+- SlowDNS mode UDP: opsi baru di kolom DNS setelah `|` (semua bawaan kosong, nilai di luar rentang
+  di-clamp dan diberi peringatan di Log):
+
+  | Opsi | Rentang | Keterangan |
+  |---|---|---|
+  | `qname` | 60..253 | nilai tetap `-max-qname-len`, tanpa turun otomatis (tidak di bawah lantai domain) |
+  | `queue` | 128..4096 | `-queue-size` |
+  | `window` | 32..2048 | `-kcp-window-size`; jika lebih besar dari queue, queue dinaikkan ke window x 2 (maks 4096) |
+  | `openstream` | 5s..60s | `-open-stream-timeout` |
+  | `idle` | 15s..120s | `-idle-timeout` |
+
+  Contoh: `112.215.198.254|rps=40,workers=20,qname=200,window=512,idle=60s`.
+  Tanpa opsi baru, argumen klien sama persis seperti 2.4.32.
+- Binary libdnstt baru: KCP mode cepat (nodelay=1, interval 20ms, fast resend 2, ACK segera) dengan RTO minimum
+  150ms (bukan 100ms bawaan atau 30ms bawaan mode nodelay). Bisa ditimpa lewat env `NISA_KCP_RXMINRTO` (100..500).
+  Ini bawaan binary baru, bukan opsi di kolom DNS.
+
 # 2.4.31
 
 - SlowDNS mode UDP: kolom DNS sekarang boleh memuat opsi penyetelan setelah alamat resolver,
