@@ -9,11 +9,15 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.lifecycleScope
 import com.v2ray.ang.AngApplication
 import com.v2ray.ang.AppConfig
 import com.v2ray.ang.R
 import com.v2ray.ang.core.LauncherManager
+import com.v2ray.ang.dto.CheckUpdateResult
 import com.v2ray.ang.dto.entities.ProfileItem
 import com.v2ray.ang.enums.EConfigType
 import com.v2ray.ang.enums.PermissionType
@@ -25,6 +29,7 @@ import com.v2ray.ang.handler.MmkvManager
 import com.v2ray.ang.handler.SettingsChangeManager
 import com.v2ray.ang.handler.SettingsManager
 import com.v2ray.ang.handler.SubscriptionInfoParser
+import com.v2ray.ang.handler.UpdateCheckerManager
 import com.v2ray.ang.ui.AboutActivity
 import com.v2ray.ang.ui.backup.BackupActivity
 import com.v2ray.ang.ui.base.HelperBaseComponentActivity
@@ -51,7 +56,9 @@ import com.v2ray.ang.ui.subscription.SubSettingActivity
 import com.v2ray.ang.ui.userasset.UserAssetActivity
 import com.v2ray.ang.util.LogUtil
 import com.v2ray.ang.util.Utils
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -93,11 +100,32 @@ class MainActivity : HelperBaseComponentActivity() {
             if (restartService) LauncherManager.restartService(this)
         }
 
+    /** Hasil cek update otomatis; bukan null = dialog update ditampilkan. */
+    private var availableUpdate by mutableStateOf<CheckUpdateResult?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         mainViewModel.onAction(MainAction.Initialize)
+        if (savedInstanceState == null) checkUpdateOnLaunch()
 
         checkAndRequestPermission(PermissionType.POST_NOTIFICATIONS) {}
+    }
+
+    /** Cek rilis terbaru di latar belakang saat aplikasi dibuka; gagal/offline = diam saja. */
+    private fun checkUpdateOnLaunch() {
+        lifecycleScope.launch {
+            try {
+                delay(1500)
+                val includePreRelease =
+                    MmkvManager.decodeSettingsBool(AppConfig.PREF_CHECK_UPDATE_PRE_RELEASE, false)
+                val result = UpdateCheckerManager.checkForUpdate(includePreRelease)
+                if (result.hasUpdate) availableUpdate = result
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                LogUtil.e(AppConfig.TAG, "Auto update check failed", e)
+            }
+        }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -134,6 +162,16 @@ class MainActivity : HelperBaseComponentActivity() {
             },
             onNavigate = { route -> navigateTo(route) },
         )
+        availableUpdate?.let { update ->
+            UpdateAvailableDialog(
+                result = update,
+                onDismiss = { availableUpdate = null },
+                onUpdate = {
+                    availableUpdate = null
+                    update.downloadUrl?.let { Utils.openUri(this, it) }
+                }
+            )
+        }
     }
 
     private fun shareToClipboard(guid: String, locked: Boolean) {
