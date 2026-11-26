@@ -71,6 +71,8 @@ object SlowDnsManager {
     @Volatile private var process: Process? = null
     private var params: Params? = null
     private var currentQname = 0
+    // true kalau pengguna menetapkan qname=... di kolom DNS: tidak ada turun otomatis.
+    private var fixedQname = false
     private var gen = 0
 
     // Disimpan di memori per jaringan: qname yang berhasil dan batas yang ditolak klien (MTU terlalu kecil).
@@ -181,6 +183,8 @@ object SlowDnsManager {
         }
 
         val cmd = mutableListOf(binary.absolutePath)
+        fixedQname = false
+        var qnameOverride: Int? = null
         when {
             p.doh.isEmpty() -> cmd += listOf("-doh", DEFAULT_DOH)
             p.doh.startsWith("http", ignoreCase = true) -> cmd += listOf("-doh", p.doh)
@@ -195,6 +199,7 @@ object SlowDnsManager {
                 } else {
                     cmd += listOf("-udp", if (udp.address.contains(':')) udp.address else udp.address + ":53")
                     cmd += udp.flags
+                    qnameOverride = udp.qname
                     TunnelLog.add("SlowDNS UDP: ${udp.summary}")
                 }
             }
@@ -205,9 +210,15 @@ object SlowDnsManager {
         if (USE_DNSTT_COMPAT) cmd += "-dnstt-compat" else cmd += listOf("-clientid-size", NATIVE_CLIENT_ID_SIZE.toString())
         val rt = p.recordType.lowercase()
         if (rt.isNotEmpty() && rt != "otomatis" && rt != "auto") cmd += listOf("-record-type", rt)
+        val floor = qnameFloor(p.domain, USE_DNSTT_COMPAT, NATIVE_CLIENT_ID_SIZE)
+        if (qnameOverride != null) {
+            val q = qnameOverride.coerceIn(floor.coerceAtMost(MAX_QNAME), MAX_QNAME)
+            if (q != qnameOverride) TunnelLog.add("SlowDNS: qname $qnameOverride di-clamp ke $q (lantai $floor)")
+            fixedQname = true
+            currentQname = q
+        }
         if (currentQname > 0) cmd += listOf("-max-qname-len", currentQname.toString())
 
-        val floor = qnameFloor(p.domain, USE_DNSTT_COMPAT, NATIVE_CLIENT_ID_SIZE)
         TunnelLog.detail(
             "SlowDNS: ${p.domain} mode=${if (USE_DNSTT_COMPAT) "compat" else "native"} " +
                 "qname=${if (currentQname == 0) "default" else currentQname.toString()} lantai=$floor"
@@ -252,6 +263,10 @@ object SlowDnsManager {
     private fun onTooSmall(myGen: Int, p: Params) {
         synchronized(lock) {
             if (myGen != gen) return
+            if (fixedQname) {
+                TunnelLog.add("SlowDNS: qname $currentQname ditolak klien (MTU terlalu kecil); naikkan qname atau hapus opsinya")
+                return
+            }
             val k = key(p)
             rejectedQname[k] = currentQname
             learnedQname.remove(k)
@@ -262,7 +277,7 @@ object SlowDnsManager {
 
     private fun stepDown(myGen: Int, p: Params) {
         synchronized(lock) {
-            if (myGen != gen) return
+            if (myGen != gen || fixedQname) return
             val k = key(p)
             val steps = qnameSteps(p.domain, USE_DNSTT_COMPAT, NATIVE_CLIENT_ID_SIZE)
             val next = nextQname(steps, currentQname, rejectedQname[k] ?: 0) ?: return
