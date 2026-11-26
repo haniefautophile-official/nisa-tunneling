@@ -34,6 +34,13 @@ object SlowDnsManager {
 
     /** Batas tunggu balasan per query UDP (bawaan klien 500ms; balasan yang telat dibuang). */
     private const val UDP_TIMEOUT = "2s"
+
+    /**
+     * Jeda ulang pembuatan sesi setelah jabat tangan gagal. Bawaan klien 1s lalu berlipat dua sampai 30s,
+     * ditambah 15s tunggu jabat tangan per percobaan: beberapa kegagalan berturut-turut = mati sekitar 2 menit.
+     */
+    private const val RECONNECT_MIN = "500ms"
+    private const val RECONNECT_MAX = "4s"
     private const val MAX_QNAME = 253
     private const val NATIVE_OVERHEAD = 45
     private const val COMPAT_OVERHEAD = 64
@@ -194,6 +201,7 @@ object SlowDnsManager {
         }
         cmd += listOf("-domain", p.domain, "-pubkey-file", pubFile.absolutePath)
         cmd += listOf("-listen", "127.0.0.1:$SLOW_DNS_LOCAL_PORT")
+        cmd += listOf("-reconnect-min", RECONNECT_MIN, "-reconnect-max", RECONNECT_MAX)
         if (USE_DNSTT_COMPAT) cmd += "-dnstt-compat" else cmd += listOf("-clientid-size", NATIVE_CLIENT_ID_SIZE.toString())
         val rt = p.recordType.lowercase()
         if (rt.isNotEmpty() && rt != "otomatis" && rt != "auto") cmd += listOf("-record-type", rt)
