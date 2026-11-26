@@ -31,6 +31,9 @@ object SlowDnsManager {
     const val NATIVE_CLIENT_ID_SIZE = 2
 
     private const val DEFAULT_DOH = "https://1.1.1.1/dns-query"
+
+    /** Batas tunggu balasan per query UDP (bawaan klien 500ms; balasan yang telat dibuang). */
+    private const val UDP_TIMEOUT = "2s"
     private const val MAX_QNAME = 253
     private const val NATIVE_OVERHEAD = 45
     private const val COMPAT_OVERHEAD = 64
@@ -175,7 +178,10 @@ object SlowDnsManager {
             p.doh.isEmpty() -> cmd += listOf("-doh", DEFAULT_DOH)
             p.doh.startsWith("http", ignoreCase = true) -> cmd += listOf("-doh", p.doh)
             p.doh.startsWith("tls://", ignoreCase = true) -> cmd += listOf("-dot", p.doh.substring(6))
-            else -> cmd += listOf("-udp", if (p.doh.contains(':')) p.doh else p.doh + ":53")
+            else -> {
+                cmd += listOf("-udp", if (p.doh.contains(':')) p.doh else p.doh + ":53")
+                cmd += listOf("-udp-timeout", UDP_TIMEOUT)
+            }
         }
         cmd += listOf("-domain", p.domain, "-pubkey-file", pubFile.absolutePath)
         cmd += listOf("-listen", "127.0.0.1:$SLOW_DNS_LOCAL_PORT")
