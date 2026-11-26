@@ -36,14 +36,126 @@ jobs:
           print("patch ok")
           PY
 
+      - name: Patch KCP mode cepat
+        working-directory: vaydns
+        shell: bash
+        run: |
+          set -euo pipefail
+          go mod vendor
+          test -f vendor/modules.txt
+          grep -q '=> github.com/net2share/kcp-go/v5' vendor/modules.txt
+          python3 - <<'PY'
+          import pathlib, re
+
+          def insert_after_function(path, anchor, block):
+              p = pathlib.Path(path)
+              text = p.read_text()
+              n = text.count(anchor)
+              assert n == 1, f'{path}: anchor {anchor!r} muncul {n}x, harus 1'
+              start = text.index(anchor)
+              i = text.index('{', start)
+              depth = 0
+              while i < len(text):
+                  if text[i] == '{':
+                      depth += 1
+                  elif text[i] == '}':
+                      depth -= 1
+                      if depth == 0:
+                          break
+                  i += 1
+              assert depth == 0, f'{path}: kurung kurawal tidak seimbang'
+              end = i + 1
+              p.write_text(text[:end] + '\n\n' + block + text[end:])
+
+          kdir = 'vendor/github.com/xtaci/kcp-go/v5/'
+          assert 'SetRxMinRto' not in pathlib.Path(kdir + 'kcp.go').read_text(), 'kcp.go sudah dipatch'
+          insert_after_function(
+              kdir + 'kcp.go',
+              'func (kcp *KCP) NoDelay(',
+              '// SetRxMinRto menetapkan batas bawah RTO (ms).\n'
+              'func (kcp *KCP) SetRxMinRto(ms int) {\n'
+              '\tif ms < 10 {\n\t\tms = 10\n\t}\n'
+              '\tif ms > 1000 {\n\t\tms = 1000\n\t}\n'
+              '\tkcp.rx_minrto = uint32(ms)\n'
+              '}',
+          )
+
+          sess_text = pathlib.Path(kdir + 'sess.go').read_text()
+          m = re.search(r'func \((\w+) \*UDPSession\) SetNoDelay\(', sess_text)
+          assert m, 'sess.go: SetNoDelay tidak ditemukan'
+          recv = m.group(1)
+          assert 'SetRxMinRto' not in sess_text, 'sess.go sudah dipatch'
+          insert_after_function(
+              kdir + 'sess.go',
+              f'func ({recv} *UDPSession) SetNoDelay(',
+              '// SetRxMinRto meneruskan batas bawah RTO ke KCP.\n'
+              f'func ({recv} *UDPSession) SetRxMinRto(ms int) {{\n'
+              f'\t{recv}.mu.Lock()\n'
+              f'\t{recv}.kcp.SetRxMinRto(ms)\n'
+              f'\t{recv}.mu.Unlock()\n'
+              '}',
+          )
+
+          call_re = re.compile(r'\b(\w+)\.SetNoDelay\(([^()]*)\)')
+          files = []
+          for base in ('vaydns-client', 'client'):
+              root = pathlib.Path(base)
+              if not root.is_dir():
+                  continue
+              for p in sorted(root.rglob('*.go')):
+                  if 'SetNoDelay(' in p.read_text():
+                      files.append(p)
+          assert files, 'pemanggil SetNoDelay tidak ditemukan'
+
+          pkgs = set()
+          for p in files:
+              src = p.read_text()
+              assert 'SetRxMinRto' not in src, f'{p} sudah dipatch'
+              total = len(call_re.findall(src))
+              assert total >= 1, f'{p}: SetNoDelay tidak cocok pola'
+              out = []
+              for line in src.split('\n'):
+                  mm = call_re.search(line)
+                  if mm:
+                      ind = line[:len(line) - len(line.lstrip())]
+                      out.append(call_re.sub(lambda x: f'{x.group(1)}.SetNoDelay(1, 20, 2, 1)', line))
+                      out.append(f'{ind}{mm.group(1)}.SetACKNoDelay(true)')
+                      out.append(f'{ind}{mm.group(1)}.SetRxMinRto(rxMinRto())')
+                  else:
+                      out.append(line)
+              p.write_text('\n'.join(out))
+              pkgs.add(re.search(r'^package\s+(\w+)', src, re.M).group(1))
+              print(f'{p}: {total} pemanggil SetNoDelay dipatch')
+
+          assert len(pkgs) == 1, f'pemanggil tersebar di beberapa paket: {pkgs}'
+          helper = files[0].parent / 'kcp_rxminrto.go'
+          assert not helper.exists(), f'{helper} sudah ada'
+          helper.write_text(
+              f'package {pkgs.pop()}\n\n'
+              'import (\n\t"os"\n\t"strconv"\n)\n\n'
+              'const (\n\trxMinRtoDefault = 150\n\trxMinRtoMin     = 100\n\trxMinRtoMax     = 500\n)\n\n'
+              '// rxMinRto membaca NISA_KCP_RXMINRTO (ms), bawaan 150, dibatasi 100..500.\n'
+              'func rxMinRto() int {\n'
+              '\traw := os.Getenv("NISA_KCP_RXMINRTO")\n'
+              '\tif raw == "" {\n\t\treturn rxMinRtoDefault\n\t}\n'
+              '\tv, err := strconv.Atoi(raw)\n'
+              '\tif err != nil {\n\t\treturn rxMinRtoDefault\n\t}\n'
+              '\tif v < rxMinRtoMin {\n\t\treturn rxMinRtoMin\n\t}\n'
+              '\tif v > rxMinRtoMax {\n\t\treturn rxMinRtoMax\n\t}\n'
+              '\treturn v\n'
+              '}\n',
+          )
+          print(f'helper ditulis: {helper}')
+          PY
+
       - name: Kompilasi arm64-v8a dan armeabi-v7a
         working-directory: vaydns
         env:
           CGO_ENABLED: '0'
         run: |
           mkdir -p ../out/arm64-v8a ../out/armeabi-v7a
-          GOOS=linux GOARCH=arm64 go build -trimpath -ldflags="-s -w" -o ../out/arm64-v8a/libdnstt.so ./vaydns-client
-          GOOS=linux GOARCH=arm GOARM=7 go build -trimpath -ldflags="-s -w" -o ../out/armeabi-v7a/libdnstt.so ./vaydns-client
+          GOOS=linux GOARCH=arm64 go build -mod=vendor -trimpath -ldflags="-s -w" -o ../out/arm64-v8a/libdnstt.so ./vaydns-client
+          GOOS=linux GOARCH=arm GOARM=7 go build -mod=vendor -trimpath -ldflags="-s -w" -o ../out/armeabi-v7a/libdnstt.so ./vaydns-client
           ls -la ../out/*/
           file ../out/*/libdnstt.so
 
