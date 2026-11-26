@@ -1,3 +1,16 @@
+# 2.4.34
+
+- SlowDNS Type "Otomatis" kini benar-benar otomatis (sebelumnya sama dengan TXT). Saat connect, aplikasi
+  menguji semua tipe record (AAAA, TXT, NULL, CNAME, MX, NS, SRV, A, CAA) ke DNS di profil secara paralel
+  (sekitar 2 detik), membuang tipe yang tidak dijawab resolver, lalu mencoba paling banyak 4 tipe
+  berurutan sampai jabat tangan berhasil. AAAA (tipe server NISA) selalu dicoba pertama selama resolver
+  tidak menjatuhkannya. Tipe yang berhasil diingat per jaringan.
+- Jalannya Otomatis tercatat di tab Log dengan awalan `SlowDNS Otomatis:` (hasil probe, tipe yang dicoba,
+  dan pesan kalau semua tipe gagal).
+- Probe hanya berjalan untuk DNS mode UDP. Untuk DoH/DoT atau DNS kosong, probe dilewati dan tipe dicoba
+  berurutan mulai dari AAAA.
+- Type manual (bukan Otomatis) tidak berubah: tetap memakai tipe yang dipilih.
+
 # 2.4.33
 
 - SlowDNS mode UDP: opsi baru di kolom DNS setelah `|` (semua bawaan kosong, nilai di luar rentang
