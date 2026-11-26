@@ -13,8 +13,8 @@ android {
         applicationId = "com.v2ray.ang"
         minSdk = 24
         targetSdk = 37
-        versionCode = 792
-        versionName = "2.4.32"
+        versionCode = 793
+        versionName = "2.4.33"
 
         val abiFilterList = (properties["ABI_FILTERS"] as? String)?.split(';')
         splits {
