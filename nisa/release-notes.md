@@ -1,3 +1,10 @@
+# 2.4.37
+
+- Perbaikan watchdog SlowDNS (2.4.36): ping yang gagal saat tunnel baru dinyalakan (jabat tangan Noise dan
+  login SSH lewat tunnel DNS butuh belasan detik) tidak lagi memicu restart dnstt. Watchdog baru aktif
+  60 detik setelah dnstt dijalankan, supaya tidak memutus sambungan yang sedang dibangun dan membuat
+  siklus restart saat konek.
+
 # 2.4.36
 
 - Watchdog SlowDNS: kalau auto ping gagal 3 kali berturut-turut, proses dnstt dimulai ulang otomatis
