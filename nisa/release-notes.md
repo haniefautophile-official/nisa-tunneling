@@ -1,3 +1,15 @@
+# 2.4.40
+
+- Baru: Auto on/off mode pesawat saat koneksi macet (SlowDNS SSH, SlowDNS V2Ray, dan Trojan), tanpa root.
+  Kalau auto ping gagal 3 kali berturut-turut, aplikasi memulihkan sendiri: SlowDNS restart dnstt dulu,
+  kalau masih macet mode pesawat dinyalakan, ditunggu sekitar 3 detik, dimatikan lagi, lalu tunnel
+  disambung ulang. Hanya aktif saat macet dan berhenti begitu internet normal. Maksimal 5 percobaan
+  (jeda sekitar 20 detik), setelah itu berhenti dan muncul notifikasi. Dilewati saat Wi-Fi aktif atau
+  sedang telepon. Kejadiannya tercatat di tab Log.
+- Cara mengaktifkan (sekali saja): Pengaturan > Advanced Settings > nyalakan "Auto on/off mode pesawat saat
+  macet", lalu ketuk "Pilih NISA sebagai aplikasi bantuan" dan pilih NISA NEXUS di layar yang terbuka.
+  Default fitur ini mati.
+
 # 2.4.39
 
 - Tab LOG lebih rapi: baris `stream ... ready` dari dnstt (satu baris tiap koneksi aplikasi, membanjiri log
