@@ -404,6 +404,34 @@
                 android:resource="@xml/cache_paths" />
         </provider>
 
+    
+        <!-- Auto on/off mode pesawat tanpa root: NISA sebagai aplikasi bantuan digital -->
+        <service
+            android:name=".service.NisaVoiceInteractionService"
+            android:exported="true"
+            android:permission="android.permission.BIND_VOICE_INTERACTION">
+            <meta-data
+                android:name="android.voice_interaction"
+                android:resource="@xml/nisa_voice_interaction" />
+            <intent-filter>
+                <action android:name="android.service.voice.VoiceInteractionService" />
+            </intent-filter>
+        </service>
+        <service
+            android:name=".service.NisaVoiceSessionService"
+            android:exported="true"
+            android:permission="android.permission.BIND_VOICE_INTERACTION" />
+        <service
+            android:name=".service.NisaRecognitionService"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.speech.RecognitionService" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <meta-data
+                android:name="android.speech"
+                android:resource="@xml/nisa_recognition" />
+        </service>
     </application>
 
 </manifest>
