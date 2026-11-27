@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tampilan NISA: tema cyber (neon, gelap), judul "NISA TUNNELING", kartu trafik + grafik
+# Tampilan NISA: tema cyber (neon, gelap), judul "NISA NEXUS", kartu trafik + grafik
 # upload/download di layar utama. Idempotent. Jalankan dari root repo, setelah branding.sh.
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -92,9 +92,9 @@ patch(f"{java}/ui/compose/Theme.kt", theme)
 def topbar(s):
     a = "        title = stringResource(R.string.title_server),\n"
     if a not in s:
-        assert "NISA TUNNELING" in s, "judul tidak ditemukan"
+        assert "NISA NEXUS" in s, "judul tidak ditemukan"
         return s
-    return s.replace(a, '        title = "NISA TUNNELING",\n')
+    return s.replace(a, '        title = "NISA NEXUS",\n')
 patch(f"{java}/ui/main/MainTopBar.kt", topbar)
 
 # ---------- 3) (dinonaktifkan) Kartu trafik di layar utama ----------
