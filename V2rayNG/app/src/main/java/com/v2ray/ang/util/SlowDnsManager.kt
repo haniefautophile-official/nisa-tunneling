@@ -408,6 +408,18 @@ object SlowDnsManager {
         }
     }
 
+    /** Mulai ulang dnstt tanpa masa tenggang (dipakai pemulihan mode pesawat: socket UDP lama sudah mati). */
+    fun forceRestart(): Boolean {
+        synchronized(lock) {
+            val p = params ?: return false
+            if (!isActive()) return false
+            lastWatchdogRestart = System.currentTimeMillis()
+            TunnelLog.add("SlowDNS: dnstt dimulai ulang setelah mode pesawat")
+            relaunchLocked(p, currentQname)
+            return true
+        }
+    }
+
     private fun relaunchLocked(p: Params, qname: Int) {
         gen++
         try {
