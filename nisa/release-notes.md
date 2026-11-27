@@ -1,3 +1,10 @@
+# 2.4.41
+
+- Optimasi ukuran dan kecepatan: APK rilis sekarang di-shrink (R8 + buang resource tak terpakai), jadi
+  ukuran file lebih kecil dan aplikasi mulai lebih cepat. Profil, format .nisa, dan pengaturan lama tidak berubah.
+- MTU bawaan VPN diturunkan dari 1500 ke 1400 untuk instalasi baru, supaya paket tidak terpecah di jaringan
+  seluler dan koneksi lebih stabil. Nilai MTU yang sudah tersimpan di pengaturan tidak diubah.
+
 # 2.4.40
 
 - Baru: Auto on/off mode pesawat saat koneksi macet (SlowDNS SSH, SlowDNS V2Ray, dan Trojan), tanpa root.
