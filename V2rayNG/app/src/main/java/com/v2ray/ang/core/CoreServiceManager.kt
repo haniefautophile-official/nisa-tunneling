@@ -268,6 +268,9 @@ object CoreServiceManager {
      *
      * @return True if the core is running again.
      */
+    /** Sambung ulang core (dipakai pemulihan mode pesawat, sama seperti saat pindah jaringan). */
+    fun reconnectForRecovery(): Boolean = reloadCore()
+
     private fun reloadCore(): Boolean {
         if (isReloading) return false
         val service = getService() ?: return false
