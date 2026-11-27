@@ -44,6 +44,7 @@ object SettingsManager {
         migrateServerListToSubscriptions()
         migrateHysteria2PinSHA256()
         migrateProxyChainProfileList()
+        migrateSlowDnsNullToAuto()
     }
 
     /**
@@ -507,6 +508,32 @@ object SettingsManager {
             }
             profile.pinnedCA256 = profile.pinSHA256
             profile.pinSHA256 = null
+            MmkvManager.encodeServerConfig(guid, profile)
+        }
+
+        MmkvManager.encodeSettings(migrationKey, true)
+    }
+
+    /**
+     * Type Otomatis sekarang benar-benar menguji tipe record (lihat SlowDnsTypeProbe), bukan hanya TXT.
+     * Profil lama yang secara manual dipaksa ke NULL kemungkinan dipilih karena TXT/Otomatis lama gagal
+     * di jaringan itu; pindahkan ke Otomatis supaya ikut diuji ulang dan tidak macet di satu tipe.
+     */
+    private fun migrateSlowDnsNullToAuto() {
+        // Check if migration has already been done
+        val migrationKey = "slowdns_null_to_auto_migrated"
+        if (MmkvManager.decodeSettingsBool(migrationKey, false)) {
+            return
+        }
+
+        val serverList = decodeAllServerList()
+
+        for (guid in serverList) {
+            val profile = decodeServerConfig(guid) ?: continue
+            if (!profile.slowDnsType.equals("NULL", ignoreCase = true)) {
+                continue
+            }
+            profile.slowDnsType = ""
             MmkvManager.encodeServerConfig(guid, profile)
         }
 
