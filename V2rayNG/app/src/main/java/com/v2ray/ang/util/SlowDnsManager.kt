@@ -212,6 +212,7 @@ object SlowDnsManager {
     private fun key(p: Params) = p.domain + "|" + networkKey(p.context)
 
     private fun launchLocked(p: Params) {
+        launchedAt = System.currentTimeMillis()
         val binary = File(p.context.applicationInfo.nativeLibraryDir, "libdnstt.so")
         if (!binary.exists()) {
             TunnelLog.add("SlowDNS: gagal, libdnstt.so tidak ditemukan")
@@ -359,6 +360,7 @@ object SlowDnsManager {
     }
 
     @Volatile private var lastWatchdogRestart = 0L
+    @Volatile private var launchedAt = 0L
 
     /**
      * Watchdog: dipanggil AutoPing saat ping gagal berturut-turut. Memulai ulang proses dnstt dengan
@@ -370,6 +372,9 @@ object SlowDnsManager {
             val p = params ?: return false
             if (!isActive()) return false
             val now = System.currentTimeMillis()
+            // Masa tenggang: jabat tangan Noise dan login SSH lewat tunnel DNS butuh belasan detik; ping yang
+            // gagal di masa itu belum berarti tunnel macet, jadi jangan dimulai ulang.
+            if (now - launchedAt < 60_000L) return false
             if (now - lastWatchdogRestart < 60_000L) return false
             lastWatchdogRestart = now
             TunnelLog.add("SlowDNS: ping gagal berulang, dnstt dimulai ulang (port sumber baru)")
