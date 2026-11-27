@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Rebrand v2rayNG -> NISA TUNNELING. Idempotent, jalankan dari root repo.
+# Rebrand v2rayNG -> NISA NEXUS. Idempotent, jalankan dari root repo.
 set -euo pipefail
-APP_NAME="NISA TUNNELING"
+APP_NAME="NISA NEXUS"
 APP_ID="id.nisavpn.tunneling"
 APP="V2rayNG/app"
 
@@ -14,7 +14,7 @@ sed -i "s#v2rayNG service#${APP_NAME} service#" "$APP"/src/main/res/values/strin
 sed -i "s#applicationId = \"com.v2ray.ang\"#applicationId = \"${APP_ID}\"#" "$APP/build.gradle.kts"
 
 # Nama file APK
-sed -i "s#v2rayNG_#NISA-TUNNELING_#g" "$APP/build.gradle.kts"
+sed -i "s#v2rayNG_#NISA-NEXUS_#g" "$APP/build.gradle.kts"
 
 grep -n 'name="app_name"' "$APP/src/main/res/values/strings.xml"
 grep -n 'applicationId' "$APP/build.gradle.kts"
