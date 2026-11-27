@@ -183,6 +183,8 @@ fun SettingsScreen(
     var autoPingEnabled by rememberMmkvBool("pref_nisa_ping_enabled", false)
     var autoPingUrl by rememberMmkvString("pref_nisa_ping_url", "")
     var autoPingInterval by rememberMmkvString("pref_nisa_ping_interval", "")
+    var airplaneRecovery by rememberMmkvBool("pref_nisa_airplane_enabled", false)
+    val settingsContext = androidx.compose.ui.platform.LocalContext.current
     var logDetail by rememberMmkvBool("pref_nisa_log_detail", false)
 
     val isVpn = mode == VPN
@@ -715,6 +717,23 @@ fun SettingsScreen(
                     value = autoPingInterval,
                     keyboardNumber = true,
                     onValueChanged = { autoPingInterval = it }
+                )
+                SettingsSwitchItem(
+                    title = "Auto on/off mode pesawat saat macet",
+                    summary = "Hanya aktif saat ping lewat tunnel gagal berulang (SlowDNS dan Trojan), berhenti begitu koneksi pulih. Maks 5 percobaan, dilewati saat Wi-Fi atau telepon",
+                    checked = airplaneRecovery,
+                    onCheckedChange = { airplaneRecovery = it }
+                )
+                SettingsMenuItem(
+                    title = "Pilih NISA sebagai aplikasi bantuan (sekali saja)",
+                    subtitle = if (com.v2ray.ang.util.AirplaneRecovery.isAssistantActive(settingsContext)) "Sudah aktif" else "Belum dipilih, wajib untuk mode pesawat tanpa root",
+                    onClick = {
+                        try {
+                            settingsContext.startActivity(Intent(Settings.ACTION_VOICE_INPUT_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                        } catch (_: Exception) {
+                            settingsContext.startActivity(Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                        }
+                    }
                 )
                 SettingsSwitchItem(
                     title = "Log detail (debug)",
