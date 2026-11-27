@@ -13,8 +13,8 @@ android {
         applicationId = "com.v2ray.ang"
         minSdk = 24
         targetSdk = 37
-        versionCode = 800
-        versionName = "2.4.40"
+        versionCode = 801
+        versionName = "2.4.41"
 
         val abiFilterList = (properties["ABI_FILTERS"] as? String)?.split(';')
         splits {
@@ -40,7 +40,8 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
