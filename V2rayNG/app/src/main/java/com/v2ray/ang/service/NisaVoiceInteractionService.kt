@@ -87,12 +87,12 @@ class NisaVoiceSession(context: Context) : VoiceInteractionSession(context) {
     }
 
     override fun onRequestCompleteVoice(request: CompleteVoiceRequest) {
-        request.sendCompleteVoiceResult(null)
+        request.sendCompleteResult(null)
         hide()
     }
 
     override fun onRequestAbortVoice(request: AbortVoiceRequest) {
-        request.sendAbortVoiceResult(null)
+        request.sendAbortResult(null)
         hide()
     }
 
