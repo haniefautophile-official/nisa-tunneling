@@ -1,3 +1,12 @@
+# 2.4.36
+
+- Watchdog SlowDNS: kalau auto ping gagal 3 kali berturut-turut, proses dnstt dimulai ulang otomatis
+  dengan tipe record dan qname yang sama. Proses baru memakai port sumber UDP baru, jadi pemetaan NAT
+  operator yang kedaluwarsa (tunnel macet setelah berjalan lama, log `noise handshake: timeout` dan
+  `Ping gagal (tunnel tidak membalas)`) terlepas tanpa menyambung ulang manual. Jeda minimal 60 detik
+  antar restart. Perlu Auto ping aktif (Pengaturan > Advanced Settings > Auto ping). Kejadiannya tercatat
+  di tab Log: `SlowDNS: ping gagal berulang, dnstt dimulai ulang (port sumber baru)`.
+
 # 2.4.35
 
 - Migrasi sekali jalan: profil tersimpan yang memakai Type NULL (manual) dipindahkan ke Otomatis saat
