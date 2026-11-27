@@ -1,3 +1,9 @@
+# 2.4.38
+
+- Form profil: pilihan TLS yang kosong sekarang tampil sebagai "none" (sebelumnya baris kosong, sehingga
+  terlihat seperti tidak ada pilihan none dan hanya ada tls dan reality). Nilainya tidak berubah, hanya
+  tulisannya. Dipakai untuk profil SlowDNS VLESS/VMess/Trojan yang harus polos (Network tcp, TLS none).
+
 # 2.4.37
 
 - Perbaikan watchdog SlowDNS (2.4.36): ping yang gagal saat tunnel baru dinyalakan (jabat tangan Noise dan
