@@ -84,6 +84,8 @@ fun FormDropdownField(
     enabled: Boolean = true,
     placeholder: String? = null,
     supportingText: String? = null,
+    // Teks untuk pilihan kosong (nilai ""), mis. "none"; null = tetap kosong seperti sebelumnya.
+    blankLabel: String? = null,
 ) {
     var expanded by rememberSaveable { mutableStateOf(false) }
     val menuScrollState = rememberScrollState()
@@ -107,7 +109,7 @@ fun FormDropdownField(
             .padding(horizontal = 16.dp, vertical = 4.dp)
     ) {
         OutlinedTextField(
-            value = value,
+            value = if (!editable && value.isEmpty() && blankLabel != null) blankLabel else value,
             onValueChange = {
                 if (editable) {
                     onValueChange(it)
@@ -153,7 +155,7 @@ fun FormDropdownField(
         ) {
             visibleOptions.forEach { option ->
                 DropdownMenuItem(
-                    text = { Text(option) },
+                    text = { Text(if (option.isEmpty() && blankLabel != null) blankLabel else option) },
                     onClick = {
                         onValueChange(option)
                         expanded = false
