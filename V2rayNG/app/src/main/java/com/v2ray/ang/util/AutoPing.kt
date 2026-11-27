@@ -27,6 +27,8 @@ object AutoPing {
 
     @Volatile
     private var generation = 0
+    @Volatile
+    private var appContext: Context? = null
     private var logcatProcess: Process? = null
 
     // NISA_CORE_ERR_V1: penyebab asli kegagalan dari log core, untuk toast tes koneksi
@@ -42,6 +44,7 @@ object AutoPing {
     @Synchronized
     fun start(context: Context, hideCoreLog: Boolean = false) {
         TunnelLog.init(context)
+        appContext = context.applicationContext
         generation++
         val gen = generation
         // Akun terkunci: log core bisa memuat alamat server, jadi tidak disalin ke tab LOG
@@ -118,6 +121,7 @@ object AutoPing {
 
     private fun loop(gen: Int) {
         var fails = 0
+        var dnsRestarted = false
         var wasEnabled = false
         var lastUrl = ""
         var lastInterval = -1
@@ -137,9 +141,28 @@ object AutoPing {
                 lastInterval = interval
                 fails = 0
             }
-            if (ping(url)) fails = 0 else fails++
+            if (ping(url)) {
+                fails = 0
+                dnsRestarted = false
+                AirplaneRecovery.onHealthy()
+            } else {
+                fails++
+            }
             if (fails == 3) TunnelLog.add("Ping gagal 3 kali berturut-turut, koneksi mungkin terputus")
-            if (fails >= 3 && SlowDnsManager.restartStale()) fails = 0
+            // Selama pemulihan mode pesawat berjalan, restart dnstt diatur oleh AirplaneRecovery
+            if (fails >= 3 && !AirplaneRecovery.isBusy()) {
+                if (SlowDnsManager.restartStale()) {
+                    // Tahap 1 (SlowDNS): dnstt sudah dimulai ulang, beri kesempatan sebelum mode pesawat
+                    fails = 0
+                    dnsRestarted = true
+                } else if (AirplaneRecovery.isEnabled() && !AirplaneRecovery.isBusyOrGivenUp() &&
+                    (!SlowDnsManager.isActive() || dnsRestarted)
+                ) {
+                    // Tahap 2: Trojan langsung ke sini; SlowDNS setelah dnstt dimulai ulang tapi masih macet
+                    appContext?.let { AirplaneRecovery.start(it) { testOnce(currentUrl()) } }
+                    fails = 0
+                }
+            }
             // Tunggu per detik supaya perubahan tujuan/interval di pengaturan langsung berlaku
             var waited = 0
             while (waited < interval && gen == generation) {
