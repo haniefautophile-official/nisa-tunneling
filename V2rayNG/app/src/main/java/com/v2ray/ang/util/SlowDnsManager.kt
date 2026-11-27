@@ -288,13 +288,38 @@ object SlowDnsManager {
         }
     }
 
+    // Baris dnstt yang hanya bising: tiap stream (tiap koneksi aplikasi) mencetak "stream ... ready/closed".
+    private val dnsttStreamNoise = Regex("""msg="stream \S+ (ready|closed|end|done)""")
+    private val dnsttFields = Regex("""level=(\w+) msg="(.*)"\s*$""")
+    private val dnsttUnreachable = Regex("(?i)network is unreachable")
+    @Volatile private var lastUnreachableLog = 0L
+
+    /**
+     * Rapikan satu baris keluaran dnstt untuk tab LOG: buang baris stream, buang cap waktu bawaan dnstt
+     * (log sudah punya jam sendiri) dan awalan level info; error jaringan yang berulang tiap detik
+     * ("network is unreachable") dicatat paling sering sekali per 15 detik. Null = jangan dicatat.
+     */
+    private fun tidyDnsttLine(line: String): String? {
+        if (dnsttStreamNoise.containsMatchIn(line)) return null
+        if (dnsttUnreachable.containsMatchIn(line)) {
+            val now = System.currentTimeMillis()
+            if (now - lastUnreachableLog < 15_000L) return null
+            lastUnreachableLog = now
+            return "jaringan HP tidak terjangkau (sendto: network is unreachable), menunggu jaringan kembali"
+        }
+        val m = dnsttFields.find(line) ?: return line
+        val level = m.groupValues[1]
+        val msg = m.groupValues[2]
+        return if (level == "info") msg else "$level: $msg"
+    }
+
     /** Baca keluaran klien: teruskan ke log, kenali penolakan MTU dan timeout jabat tangan berulang. */
     private fun watch(pr: Process, myGen: Int, p: Params) {
         val startedAt = System.currentTimeMillis()
         var timeouts = 0
         try {
             pr.inputStream.bufferedReader().forEachLine { line ->
-                TunnelLog.essential("dnstt: $line")
+                tidyDnsttLine(line)?.let { TunnelLog.essential("dnstt: $it") }
                 if (tooSmall.containsMatchIn(line)) {
                     onTooSmall(myGen, p)
                 } else if (timeoutWords.containsMatchIn(line) &&
