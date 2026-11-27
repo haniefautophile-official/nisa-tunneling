@@ -1,3 +1,10 @@
+# 2.4.35
+
+- Migrasi sekali jalan: profil tersimpan yang memakai Type NULL (manual) dipindahkan ke Otomatis saat
+  aplikasi dibuka, supaya ikut diuji oleh probe tipe record otomatis (2.4.34) alih-alih macet di satu
+  tipe yang mungkin dipilih dulu karena Otomatis lama gagal. Profil dengan Type lain (TXT, AAAA, dll.)
+  tidak diubah.
+
 # 2.4.34
 
 - SlowDNS Type "Otomatis" kini benar-benar otomatis (sebelumnya sama dengan TXT). Saat connect, aplikasi
@@ -10,6 +17,8 @@
 - Probe hanya berjalan untuk DNS mode UDP. Untuk DoH/DoT atau DNS kosong, probe dilewati dan tipe dicoba
   berurutan mulai dari AAAA.
 - Type manual (bukan Otomatis) tidak berubah: tetap memakai tipe yang dipilih.
+- Nama aplikasi berganti dari NISA TUNNELING menjadi NISA NEXUS (nama di launcher, judul layar utama, dan nama file APK).
+  ID aplikasi tidak berubah, jadi update tetap menimpa versi lama dan profil/config tetap aman.
 
 # 2.4.33
 
