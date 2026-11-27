@@ -1,4 +1,4 @@
-# NISA TUNNELING
+# NISA NEXUS
 
 Aplikasi tunneling Android buatan **Hanief Autophile** untuk pelanggan [NisaVPN](https://nisavpn.my.id). Dibangun di atas [v2rayNG](https://github.com/2dust/v2rayNG) (core [Xray](https://github.com/XTLS/Xray-core)), dengan tambahan fitur dan tampilan NISA.
 
