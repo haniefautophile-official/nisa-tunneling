@@ -265,7 +265,8 @@ abstract class BaseServerActivity : BaseComponentActivity() {
                     stringResource(R.string.server_lab_stream_security),
                     state.streamSecurity,
                     options.streamSecurityOptions,
-                    { state.streamSecurity = it }
+                    { state.streamSecurity = it },
+                    blankLabel = "none"
                 )
             }
 
