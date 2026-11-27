@@ -358,6 +358,26 @@ object SlowDnsManager {
         }
     }
 
+    @Volatile private var lastWatchdogRestart = 0L
+
+    /**
+     * Watchdog: dipanggil AutoPing saat ping gagal berturut-turut. Memulai ulang proses dnstt dengan
+     * qname/tipe yang sama; proses baru memakai port sumber UDP baru, jadi pemetaan NAT yang basi terlepas.
+     * Jeda minimal 60 detik antar restart supaya tidak berputar-putar.
+     */
+    fun restartStale(): Boolean {
+        synchronized(lock) {
+            val p = params ?: return false
+            if (!isActive()) return false
+            val now = System.currentTimeMillis()
+            if (now - lastWatchdogRestart < 60_000L) return false
+            lastWatchdogRestart = now
+            TunnelLog.add("SlowDNS: ping gagal berulang, dnstt dimulai ulang (port sumber baru)")
+            relaunchLocked(p, currentQname)
+            return true
+        }
+    }
+
     private fun relaunchLocked(p: Params, qname: Int) {
         gen++
         try {
