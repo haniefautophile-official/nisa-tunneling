@@ -1,3 +1,10 @@
+# 2.4.39
+
+- Tab LOG lebih rapi: baris `stream ... ready` dari dnstt (satu baris tiap koneksi aplikasi, membanjiri log
+  saat Log detail menyala) tidak lagi dicatat. Baris dnstt lain dipersingkat: cap waktu bawaan dnstt dan
+  awalan `level=info` dibuang (jam sudah ada di awal baris). Error `network is unreachable` yang berulang
+  tiap detik saat sinyal hilang kini hanya dicatat satu kali per 15 detik sebagai satu baris ringkas.
+
 # 2.4.38
 
 - Form profil: pilihan TLS yang kosong sekarang tampil sebagai "none" (sebelumnya baris kosong, sehingga
