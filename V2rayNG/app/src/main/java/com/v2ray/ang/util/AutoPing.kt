@@ -139,6 +139,7 @@ object AutoPing {
             }
             if (ping(url)) fails = 0 else fails++
             if (fails == 3) TunnelLog.add("Ping gagal 3 kali berturut-turut, koneksi mungkin terputus")
+            if (fails >= 3 && SlowDnsManager.restartStale()) fails = 0
             // Tunggu per detik supaya perubahan tujuan/interval di pengaturan langsung berlaku
             var waited = 0
             while (waited < interval && gen == generation) {
